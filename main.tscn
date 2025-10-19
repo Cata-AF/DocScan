@@ -46,7 +46,7 @@ _data = {
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1bvp3"]
 bg_color = Color(0, 0, 0, 0.7058824)
 
-[node name="main" type="Node" node_paths=PackedStringArray("download_requements_panel", "btn_download_requirements", "img_loading", "processed_files_container", "files_dropped_list", "panel_processed_files", "label_files_processed", "progress_bar_processed_files")]
+[node name="main" type="Node" node_paths=PackedStringArray("download_requements_panel", "btn_download_requirements", "img_loading", "processed_files_container", "files_dropped_list", "panel_processed_files", "label_files_processed", "progress_bar_processed_files", "use_threads")]
 script = ExtResource("1_ig7tw")
 download_requements_panel = NodePath("CanvasLayer/PanelDependecies")
 btn_download_requirements = NodePath("CanvasLayer/PanelDependecies/ButtonDownload")
@@ -57,6 +57,7 @@ files_dropped_list = NodePath("CanvasLayer/HSplitContainer/PanelFilesDropped/Ite
 panel_processed_files = NodePath("CanvasLayer/PanelProcessedFiled")
 label_files_processed = NodePath("CanvasLayer/PanelProcessedFiled/LabelProcessedFiles")
 progress_bar_processed_files = NodePath("CanvasLayer/PanelProcessedFiled/ProgressBar")
+use_threads = NodePath("CanvasLayer/CheckButtonEnableThreads")
 
 [node name="CanvasLayer" type="CanvasLayer" parent="."]
 
@@ -260,6 +261,18 @@ offset_right = 254.0
 offset_bottom = 59.0
 grow_horizontal = 2
 grow_vertical = 2
+
+[node name="CheckButtonEnableThreads" type="CheckButton" parent="CanvasLayer"]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -160.0
+offset_top = 22.0
+offset_right = -19.0
+offset_bottom = 53.0
+grow_horizontal = 0
+button_pressed = true
+text = "Use threads"
 
 [connection signal="pressed" from="CanvasLayer/PanelDependecies/ButtonDownload" to="." method="_on_button_download_pressed"]
 [connection signal="pressed" from="CanvasLayer/HSplitContainer/PanelFilesDropped/ButtonProcess" to="." method="_on_button_process_pressed"]

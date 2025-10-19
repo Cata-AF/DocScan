@@ -46,8 +46,8 @@ func validate_integrity():
 	else:
 		commentaries = validate_integrity_umts()
 
-	verify_broken_images()
 	set_commentaries(commentaries)
+	verify_broken_images()
 
 func get_node_deepest_content(xml_node: XMLNode) -> String:
 	if len(xml_node.children) > 0:
@@ -263,11 +263,11 @@ func validate_integrity_umts()  -> Array[String]:
 
 
 func set_commentaries(commentaries: Array[String]):
-	print("-------------commentaries")
+	#print("-------------commentaries")
 	text_edit_commentaries.text = ""
 	for i in len(commentaries):
 		var commentary = commentaries[i]
-		print("    %s" % commentary)
+		#print("    %s" % commentary)
 		text_edit_commentaries.text += commentary
 
 		if i + 1 < len(commentaries):
@@ -295,8 +295,6 @@ func set_commentaries(commentaries: Array[String]):
 	file.store_string(file_data)
 	file.close()
 
-	print("💬 Commentaries set in the preview document")
-
 
 func verify_broken_images():
 	var url_broken_img = "https://placehold.co/472x302/red/white"
@@ -308,8 +306,6 @@ func verify_broken_images():
 
 	var results = rx_imgs.search_all(file_data)
 	var broken_images : int = 0
-
-	print("-*******************************************")
 
 	for img in results:
 		var tag = img.get_string(0)
@@ -327,8 +323,6 @@ func verify_broken_images():
 		broken_images = rx_imgs_broken_fallback.search_all(file_data).size()
 
 	if broken_images > 0:
-		print("💥 broken images: ", broken_images)
-
 		text_edit_commentaries.text = "broken images: %d\n%s" % [broken_images, text_edit_commentaries.text]
 		var file = FileAccess.open(preview_file_path, FileAccess.WRITE)
 		file.store_string(file_data)
@@ -341,7 +335,7 @@ func get_file_type() -> String:
 	elif file_name.to_lower().contains("umts"):
 		return "UMTS"
 	else:
-		push_error("file type not found yet")
+		push_error("file type for \"%s\" not found" % file_name)
 		return ""
 
 

@@ -10,6 +10,7 @@ extends Node
 @export var panel_processed_files : Panel
 @export var label_files_processed : Label
 @export var progress_bar_processed_files : ProgressBar
+@export var use_threads : CheckButton
 
 var bin_path = "res://bin"
 var temp_dir_path = "res://temp"
@@ -156,59 +157,24 @@ func _on_button_process_pressed() -> void:
 		f.queue_free()
 
 	processed_files.clear()
+	files_processed = 0
 
 	# Convert files
 	for file in docx_files:
-		var file_name = file.get_file()
-		var file_path = file.replace(file_name, file_name.replace(" "," "))
-		var out_file = ProjectSettings.globalize_path("%s/%s" % [temp_dir_path, file_name.replace(" ", "_")])
-		out_file = out_file.replace(".docx", ".html")
-
-		var out_xml_path = out_file.replace(".html", ".xml")
-
-		print("%s -> %s" % [file, out_file])
-
-		var output : Array = []
-
-		# conver docx to html & xml
-		var err = OS.execute(ProjectSettings.globalize_path(get_pandoc_path()), [
-			"%s" % file_path,
-			"-t", "html",
-			"-o", "\"%s\"" % out_file,
-			"--embed-resources",
-			"--standalone"
-		], output, true, true)
-
-		if err != OK:
-			push_error("error converting file to html %s -> %s" % [file_name, "".join(output)])
+		if not use_threads.button_pressed:
+			process_file(file, false)
+			await get_tree().process_frame
 			continue
 
-		err = OS.execute(ProjectSettings.globalize_path(get_pandoc_path()), [
-			"%s" % file_path,
-			"-o", "\"%s\"" % out_xml_path,
-			"--embed-resources",
-			"--standalone"
-		], output, true, true)
+		var th = Thread.new()
+		active_threads.append(th)
+		th.start(process_file.bind(file, use_threads.button_pressed))
 
-		if err != OK:
-			push_error("error converting file to xml %s -> %s" % [file_name, "".join(output)])
-			continue
+	# wait for active tasks if active
+	if use_threads.button_pressed:
+		while files_processed < len(docx_files):
+			await get_tree().process_frame
 
-		var processed_file = scene_processed_file.instantiate() as ICProcessedFile
-		processed_file.setup(out_file, out_xml_path)
-		processed_file.validate_integrity()
-
-		files_processed += 1
-
-		label_files_processed.text = "%d/%d" % [files_processed, total_files]
-		progress_bar_processed_files.value = (float(files_processed) / total_files) * 100
-
-		await get_tree().process_frame
-
-		processed_files_container.add_child(processed_file)
-		processed_files.append(processed_file)
-
-		print("💫 %s converted to html & xml" % file_name)
 
 	label_files_processed.text = "%d/%d" % [total_files, total_files]
 	progress_bar_processed_files.value = 100
@@ -216,16 +182,18 @@ func _on_button_process_pressed() -> void:
 	panel_processed_files.visible = false
 
 
-func process_file(docx_file_path: String):
+func process_file(docx_file_path: String, is_using_threads: bool):
 	var file_name = docx_file_path.get_file()
 	var file_path = docx_file_path.replace(file_name, file_name.replace(" "," "))
 	var out_file = ProjectSettings.globalize_path("%s/%s" % [temp_dir_path, file_name.replace(" ", "_")])
 	out_file = out_file.replace(".docx", ".html")
 	var out_xml_path = out_file.replace(".html", ".xml")
 
+	var processed_file : ICProcessedFile
+
 	# hack to make "finally" statements
-	while false:
-		print("%s -> %s" % [docx_file_path, out_file])
+	while true:
+		print("processing %s" % docx_file_path.get_file())
 
 		var output : Array = []
 
@@ -253,22 +221,29 @@ func process_file(docx_file_path: String):
 			push_error("error converting file to xml %s -> %s" % [file_name, "".join(output)])
 			break
 
-		var processed_file = scene_processed_file.instantiate() as ICProcessedFile
+		processed_file = scene_processed_file.instantiate() as ICProcessedFile
 		processed_file.setup(out_file, out_xml_path)
 		processed_file.validate_integrity()
 
-		await get_tree().process_frame
+		# ⚠️⚠️⚠️ prevent infinite loop ⚠️⚠️⚠️
+		break
 
-		processed_files_container.add_child(processed_file)
-		processed_files.append(processed_file)
+	if is_using_threads:
+		call_deferred("on_finish_process_file", processed_file)
+	else:
+		on_finish_process_file(processed_file)
 
 	print("💫 %s converted to html & xml" % file_name)
 
 
-func on_finish_process_file():
+func on_finish_process_file(processed_file: ICProcessedFile):
 	files_processed += 1
 	label_files_processed.text = "%d/%d" % [files_processed, len(docx_files)]
 	progress_bar_processed_files.value = (float(files_processed) / len(docx_files)) * 100
+
+	processed_files_container.add_child(processed_file)
+	processed_files.append(processed_file)
+
 
 func _on_button_analize_files_pressed() -> void:
 	for file in processed_files:
