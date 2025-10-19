@@ -1,0 +1,43 @@
+[gd_scene load_steps=3 format=3 uid="uid://dc3vsjytvw7pg"]
+
+[ext_resource type="Script" uid="uid://c55kdvit20fyh" path="res://scripts/ICProcessedFile.gd" id="1_dehdn"]
+[ext_resource type="StyleBox" uid="uid://bnia5ddlwcwuu" path="res://styles/button_outline.tres" id="2_txc0r"]
+
+[node name="ProcessedFile" type="FoldableContainer" node_paths=PackedStringArray("btn_view", "text_edit_commentaries")]
+offset_right = 208.0
+offset_bottom = 31.0
+folded = true
+title = "Pollito.txt"
+script = ExtResource("1_dehdn")
+btn_view = NodePath("MarginContainer/VBoxContainer/ButtonOpenInBrowser")
+text_edit_commentaries = NodePath("MarginContainer/VBoxContainer/Commentaries")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 5
+theme_override_constants/margin_right = 5
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+
+[node name="ButtonOpenInBrowser" type="Button" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_styles/normal = ExtResource("2_txc0r")
+text = "Open in browser"
+
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Commentaries:"
+
+[node name="Commentaries" type="TextEdit" parent="MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 150)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/line_spacing = -2
+text = "vaca
+pollito
+panqui panqui"
+editable = false
+
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ButtonOpenInBrowser" to="." method="_on_button_open_in_browser_pressed"]

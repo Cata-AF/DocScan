@@ -1,0 +1,266 @@
+[gd_scene load_steps=9 format=3 uid="uid://bf0apqv8si1g6"]
+
+[ext_resource type="Script" uid="uid://yfufjk7fe18e" path="res://scripts/ICMain.gd" id="1_ig7tw"]
+[ext_resource type="Texture2D" uid="uid://0y388bett45v" path="res://icon.svg" id="2_0xm2m"]
+[ext_resource type="PackedScene" uid="uid://dc3vsjytvw7pg" path="res://scenes/processed_file.tscn" id="2_h2yge"]
+[ext_resource type="StyleBox" uid="uid://bnia5ddlwcwuu" path="res://styles/button_outline.tres" id="3_1bvp3"]
+
+[sub_resource type="Animation" id="Animation_h2yge"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("ImgLoading:rotation")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [6.2831855]
+}
+
+[sub_resource type="Animation" id="Animation_0xm2m"]
+resource_name = "rotate"
+length = 5.0
+loop_mode = 1
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("ImgLoading:rotation")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 5),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [0.0, 6.2831855]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_1bvp3"]
+_data = {
+&"RESET": SubResource("Animation_h2yge"),
+&"rotate": SubResource("Animation_0xm2m")
+}
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1bvp3"]
+bg_color = Color(0, 0, 0, 0.7058824)
+
+[node name="main" type="Node" node_paths=PackedStringArray("download_requements_panel", "btn_download_requirements", "img_loading", "processed_files_container", "files_dropped_list", "panel_processed_files", "label_files_processed", "progress_bar_processed_files")]
+script = ExtResource("1_ig7tw")
+download_requements_panel = NodePath("CanvasLayer/PanelDependecies")
+btn_download_requirements = NodePath("CanvasLayer/PanelDependecies/ButtonDownload")
+img_loading = NodePath("CanvasLayer/PanelDependecies/ImgLoading")
+scene_processed_file = ExtResource("2_h2yge")
+processed_files_container = NodePath("CanvasLayer/HSplitContainer/PanelFilesProcessed/ScrollContainer/VBoxContainer")
+files_dropped_list = NodePath("CanvasLayer/HSplitContainer/PanelFilesDropped/ItemList")
+panel_processed_files = NodePath("CanvasLayer/PanelProcessedFiled")
+label_files_processed = NodePath("CanvasLayer/PanelProcessedFiled/LabelProcessedFiles")
+progress_bar_processed_files = NodePath("CanvasLayer/PanelProcessedFiled/ProgressBar")
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="PanelDependecies" type="Panel" parent="CanvasLayer"]
+offset_left = 14.0
+offset_top = 11.0
+offset_right = 395.0
+offset_bottom = 68.0
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="CanvasLayer/PanelDependecies"]
+libraries = {
+&"": SubResource("AnimationLibrary_1bvp3")
+}
+autoplay = "rotate"
+
+[node name="Label" type="Label" parent="CanvasLayer/PanelDependecies"]
+layout_mode = 0
+offset_left = 17.0
+offset_top = 16.0
+offset_right = 202.0
+offset_bottom = 39.0
+text = "Dependencies required!"
+
+[node name="ButtonDownload" type="Button" parent="CanvasLayer/PanelDependecies"]
+layout_mode = 0
+offset_left = 218.0
+offset_top = 12.0
+offset_right = 305.0
+offset_bottom = 43.0
+text = "Download"
+
+[node name="ImgLoading" type="TextureRect" parent="CanvasLayer/PanelDependecies"]
+layout_mode = 0
+offset_left = 330.0
+offset_top = 8.0
+offset_right = 370.0
+offset_bottom = 48.0
+rotation = 6.2831855
+pivot_offset = Vector2(20, 20)
+texture = ExtResource("2_0xm2m")
+expand_mode = 1
+
+[node name="HSplitContainer" type="HSplitContainer" parent="CanvasLayer"]
+anchors_preset = 14
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = 14.0
+offset_top = -245.0
+offset_right = -12.285034
+offset_bottom = 301.0
+grow_horizontal = 2
+grow_vertical = 2
+split_offset = 330
+
+[node name="PanelFilesDropped" type="Panel" parent="CanvasLayer/HSplitContainer"]
+layout_mode = 2
+
+[node name="ItemList" type="ItemList" parent="CanvasLayer/HSplitContainer/PanelFilesDropped"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 67.0
+offset_right = -8.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Label2" type="Label" parent="CanvasLayer/HSplitContainer/PanelFilesDropped"]
+layout_mode = 1
+offset_left = 13.0
+offset_top = 15.0
+offset_right = 139.0
+offset_bottom = 48.0
+text = "Files dropped:"
+vertical_alignment = 1
+
+[node name="ScrollContainer" type="ScrollContainer" parent="CanvasLayer/HSplitContainer/PanelFilesDropped"]
+layout_mode = 0
+offset_left = 17.0
+offset_top = 125.0
+offset_right = 464.0
+offset_bottom = 438.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CanvasLayer/HSplitContainer/PanelFilesDropped/ScrollContainer"]
+layout_mode = 2
+
+[node name="LabelFiles" type="Label" parent="CanvasLayer/HSplitContainer/PanelFilesDropped/ScrollContainer/VBoxContainer"]
+custom_minimum_size = Vector2(440, 3.73)
+layout_mode = 2
+autowrap_mode = 2
+
+[node name="ButtonProcess" type="Button" parent="CanvasLayer/HSplitContainer/PanelFilesDropped"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -129.0
+offset_top = 14.0
+offset_right = -9.0
+offset_bottom = 49.0
+grow_horizontal = 0
+theme_override_styles/normal = ExtResource("3_1bvp3")
+text = "Process files"
+
+[node name="PanelFilesProcessed" type="Panel" parent="CanvasLayer/HSplitContainer"]
+layout_mode = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="CanvasLayer/HSplitContainer/PanelFilesProcessed"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 65.0
+grow_horizontal = 2
+grow_vertical = 2
+horizontal_scroll_mode = 0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CanvasLayer/HSplitContainer/PanelFilesProcessed/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ProcessedFile" parent="CanvasLayer/HSplitContainer/PanelFilesProcessed/ScrollContainer/VBoxContainer" instance_placeholder="res://scenes/processed_file.tscn"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CanvasLayer/HSplitContainer/PanelFilesProcessed"]
+layout_mode = 0
+offset_left = 21.0
+offset_top = 20.0
+offset_right = 139.0
+offset_bottom = 43.0
+text = "Files processed"
+
+[node name="ButtonAnalizeFiles" type="Button" parent="CanvasLayer/HSplitContainer/PanelFilesProcessed"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -129.0
+offset_top = 14.0
+offset_right = -9.0
+offset_bottom = 49.0
+grow_horizontal = 0
+theme_override_styles/normal = ExtResource("3_1bvp3")
+text = "Analize files"
+
+[node name="PanelProcessedFiled" type="Panel" parent="CanvasLayer"]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_1bvp3")
+
+[node name="Label" type="Label" parent="CanvasLayer/PanelProcessedFiled"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -59.0
+offset_top = -82.0
+offset_right = 60.0
+offset_bottom = -59.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 30
+text = "Processing files"
+
+[node name="LabelProcessedFiles" type="Label" parent="CanvasLayer/PanelProcessedFiled"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -26.0
+offset_top = -29.0
+offset_right = 27.0
+offset_bottom = 6.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 25
+text = "3/10"
+horizontal_alignment = 1
+
+[node name="ProgressBar" type="ProgressBar" parent="CanvasLayer/PanelProcessedFiled"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -254.0
+offset_top = 26.0
+offset_right = 254.0
+offset_bottom = 59.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[connection signal="pressed" from="CanvasLayer/PanelDependecies/ButtonDownload" to="." method="_on_button_download_pressed"]
+[connection signal="pressed" from="CanvasLayer/HSplitContainer/PanelFilesDropped/ButtonProcess" to="." method="_on_button_process_pressed"]
+[connection signal="pressed" from="CanvasLayer/HSplitContainer/PanelFilesProcessed/ButtonAnalizeFiles" to="." method="_on_button_analize_files_pressed"]
