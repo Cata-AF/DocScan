@@ -61,6 +61,9 @@ func _prepare_requirements():
 
 	var zip_path = get_pandoc_compressed_file_path();
 
+	if not DirAccess.dir_exists_absolute("res://bin"):
+		DirAccess.make_dir_absolute("res://bin")
+
 	# Download pandoc
 	if not FileAccess.file_exists(zip_path):
 		var url = get_pandoc_download_url()
@@ -75,7 +78,7 @@ func _prepare_requirements():
 		var result = await req.request_completed
 
 		if result[0] != OK:
-			push_error("❌ Error trying to make the request to download pandoc")
+			push_error("❌ Error trying to make the request to download pandoc, err %d" % result[0])
 			return
 
 		if result[1] != HTTPClient.RESPONSE_OK:
@@ -88,22 +91,23 @@ func _prepare_requirements():
 	if not FileAccess.file_exists(get_pandoc_path()):
 
 		var exit_code
+		var output = []
 
 		if OS.get_name() == "Linux":
 			exit_code = OS.execute("tar", [
 				"-xzf", ProjectSettings.globalize_path(zip_path),
 				"-C", ProjectSettings.globalize_path(bin_path)
-			])
+			], output, true)
 		else:
 			exit_code = OS.execute("powershell.exe", [
 				"Expand-Archive",
-				"-Path", "\"%s\"" % ProjectSettings.globalize_path(zip_path),
-				"-DestinationPath", "\"%s\"" % ProjectSettings.globalize_path(bin_path),
+				"-Path", "'%s'" % ProjectSettings.globalize_path(zip_path),
+				"-DestinationPath", "'%s'" % ProjectSettings.globalize_path(bin_path),
 				"-Force"
-			])
+			], output, true)
 
 		if exit_code != OK:
-			push_error("❌ Failed to extract (exit code: %d)" % [exit_code])
+			push_error("❌ Failed to extract (exit code: %d), output:\n%s" % [exit_code, "".join(output)])
 			return
 
 		print("✅ Successfully extracted pandoc")
@@ -113,9 +117,9 @@ func _prepare_requirements():
 
 func get_pandoc_download_url():
 	if OS.get_name() == "Linux":
-		return "https://github.com/jgm/pandoc/releases/download/%s/pandoc-%s-linux-amd64.tar.gz" % pandoc_version
+		return "https://github.com/jgm/pandoc/releases/download/%s/pandoc-%s-linux-amd64.tar.gz" % [pandoc_version, pandoc_version]
 
-	return "https://github.com/jgm/pandoc/releases/download/%s/pandoc-%s-windows-x86_64.zip" % pandoc_version
+	return "https://github.com/jgm/pandoc/releases/download/%s/pandoc-%s-windows-x86_64.zip" % [pandoc_version, pandoc_version]
 
 
 func get_pandoc_compressed_file_path():
@@ -154,7 +158,8 @@ func _on_button_process_pressed() -> void:
 
 	# Clear converted files container
 	for f in processed_files:
-		f.queue_free()
+		if f != null:
+			f.queue_free()
 
 	processed_files.clear()
 	files_processed = 0
@@ -184,7 +189,8 @@ func _on_button_process_pressed() -> void:
 
 func process_file(docx_file_path: String, is_using_threads: bool):
 	var file_name = docx_file_path.get_file()
-	var file_path = docx_file_path.replace(file_name, file_name.replace(" "," "))
+	
+	var file_path = docx_file_path
 	var out_file = ProjectSettings.globalize_path("%s/%s" % [temp_dir_path, file_name.replace(" ", "_")])
 	out_file = out_file.replace(".docx", ".html")
 	var out_xml_path = out_file.replace(".html", ".xml")
@@ -197,25 +203,29 @@ func process_file(docx_file_path: String, is_using_threads: bool):
 
 		var output : Array = []
 
+		var docx_file_global_path = "%s" % file_path if OS.get_name() == "Windows" else "%s" % file_path
+		var out_html_file = out_file if OS.get_name() == "Windows" else "\"%s\"" % file_path
+		var out_xml_file = out_xml_path if OS.get_name() == "Windows" else "\"%s\"" % out_xml_path
+
 		# conver docx to html & xml
 		var err = OS.execute(ProjectSettings.globalize_path(get_pandoc_path()), [
-			"%s" % file_path,
+			docx_file_global_path,
 			"-t", "html",
-			"-o", "\"%s\"" % out_file,
+			"-o", out_html_file,
 			"--embed-resources",
 			"--standalone"
-		], output, true, true)
+		], output, true)
 
 		if err != OK:
-			push_error("error converting file to html %s -> %s" % [file_name, "".join(output)])
+			push_error("error converting file to html \nfile: %s, \nfile_path: %s \n %s" % [file_name, docx_file_global_path, "".join(output)])
 			break
 
 		err = OS.execute(ProjectSettings.globalize_path(get_pandoc_path()), [
-			"%s" % file_path,
-			"-o", "\"%s\"" % out_xml_path,
+			docx_file_global_path,
+			"-o", out_xml_file,
 			"--embed-resources",
 			"--standalone"
-		], output, true, true)
+		], output, true)
 
 		if err != OK:
 			push_error("error converting file to xml %s -> %s" % [file_name, "".join(output)])
