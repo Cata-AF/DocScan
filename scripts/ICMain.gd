@@ -12,8 +12,11 @@ extends Node
 @export var progress_bar_processed_files : ProgressBar
 @export var use_threads : CheckButton
 
-var bin_path = "res://bin"
-var temp_dir_path = "res://temp"
+var bin_path_format = "%s/bin"
+var temp_dir_path_format = "%s/temp"
+
+var bin_path = ""
+var temp_dir_path = ""
 
 var pandoc_version = "3.8.2"
 
@@ -25,6 +28,12 @@ var active_threads : Array[Thread] = []
 var files_processed: int = 0
 
 func _ready() -> void:
+	bin_path = bin_path_format % get_working_dir_path()
+	temp_dir_path = temp_dir_path_format  % get_working_dir_path()
+
+	print("bin_path -> %s" % bin_path)
+	print("temp_dir_path -> %s" % temp_dir_path)
+
 	get_window().files_dropped.connect(_on_window_files_dropped)
 	_validate_requirements()
 
@@ -61,8 +70,8 @@ func _prepare_requirements():
 
 	var zip_path = get_pandoc_compressed_file_path();
 
-	if not DirAccess.dir_exists_absolute("res://bin"):
-		DirAccess.make_dir_absolute("res://bin")
+	if not DirAccess.dir_exists_absolute(bin_path):
+		DirAccess.make_dir_absolute(bin_path)
 
 	# Download pandoc
 	if not FileAccess.file_exists(zip_path):
@@ -124,9 +133,9 @@ func get_pandoc_download_url():
 
 func get_pandoc_compressed_file_path():
 	if OS.get_name() == "Linux":
-		return "res://bin/pandoc.tar.gz"
+		return "%s/pandoc.tar.gz" % bin_path
 
-	return "res://bin/pandoc.zip"
+	return "%s/pandoc.zip" % bin_path
 
 
 func get_pandoc_path():
@@ -149,11 +158,11 @@ func _on_button_process_pressed() -> void:
 
 	await get_tree().create_timer(.2).timeout
 
-	var dir = DirAccess.open("res://")
+	var dir = DirAccess.open(get_working_dir_path())
 
 	if not dir.dir_exists("temp"):
 		dir.make_dir("temp")
-		var file = FileAccess.open("res://.gdignore", FileAccess.WRITE)
+		var file = FileAccess.open("%s/.gdignore" % get_working_dir_path(), FileAccess.WRITE)
 		file.close()
 
 	# Clear converted files container
@@ -189,7 +198,7 @@ func _on_button_process_pressed() -> void:
 
 func process_file(docx_file_path: String, is_using_threads: bool):
 	var file_name = docx_file_path.get_file()
-	
+
 	var file_path = docx_file_path
 	var out_file = ProjectSettings.globalize_path("%s/%s" % [temp_dir_path, file_name.replace(" ", "_")])
 	out_file = out_file.replace(".docx", ".html")
@@ -204,7 +213,7 @@ func process_file(docx_file_path: String, is_using_threads: bool):
 		var output : Array = []
 
 		var docx_file_global_path = "%s" % file_path if OS.get_name() == "Windows" else "%s" % file_path
-		var out_html_file = out_file if OS.get_name() == "Windows" else "\"%s\"" % file_path
+		var out_html_file = out_file if OS.get_name() == "Windows" else "\"%s\"" % out_file
 		var out_xml_file = out_xml_path if OS.get_name() == "Windows" else "\"%s\"" % out_xml_path
 
 		# conver docx to html & xml
@@ -263,3 +272,10 @@ func _on_button_analize_files_pressed() -> void:
 func _on_close_requested() -> void:
 	for t in active_threads:
 		t.wait_to_finish()
+
+
+func get_working_dir_path():
+	if OS.has_feature("editor"):
+		return ProjectSettings.globalize_path("res://").trim_suffix("/")
+
+	return OS.get_executable_path().replace("/%s" % OS.get_executable_path().get_file(), "")
