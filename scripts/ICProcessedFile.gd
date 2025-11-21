@@ -48,6 +48,7 @@ func validate_integrity():
 
 	set_commentaries(commentaries)
 	verify_broken_images()
+	summarize_media_counts_by_category()
 
 func get_node_deepest_content(xml_node: XMLNode) -> String:
 	if len(xml_node.children) > 0:
@@ -179,6 +180,7 @@ func validate_integrity_umts()  -> Array[String]:
 	var found_rscp_avg: bool = false
 	var found_ecio_avg: bool = false
 	var found_sc_wdma_call_drop: bool = false
+	var found_sho_success_rate: bool = false
 
 	for i in len(tables_xml):
 		var table : XMLNode = tables_xml[i]
@@ -251,13 +253,18 @@ func validate_integrity_umts()  -> Array[String]:
 					if value < 100:
 						commentaries.append("[%s] WCDMA call dropped event ocurred. (%s%%)" % [SC_SHO_SUCCESS_RATE, value_text])
 
-			if row_title == SHO_SUCCESS_RATE:
+			if row_title == SHO_SUCCESS_RATE and not found_sho_success_rate:
+				found_sho_success_rate = true
+
 				var value_text = row_value.replace("%", "")
 				if value_text.is_valid_float():
 					var value = value_text.to_float()
 
 					if value < 100:
 						commentaries.append("[%s] WCDMA call dropped event ocurred. (%s%%)" % [SHO_SUCCESS_RATE, value_text])
+				else:
+					if value_text.is_empty():
+						commentaries.append("[%s] was not made or information wasn't found." % [SHO_SUCCESS_RATE])
 
 	return commentaries
 
@@ -312,7 +319,7 @@ func verify_broken_images():
 		var src = img.get_string(1)
 		var matches := rx_broken_pattern.search_all(src)
 
-		if matches.size() > 10:	# possible broken image
+		if matches.size() > 8:	# possible broken image
 			broken_images += 1
 			var src_replaced = tag.replace(src, url_broken_img)
 			file_data = file_data.replace(tag, src_replaced)
@@ -327,6 +334,137 @@ func verify_broken_images():
 		var file = FileAccess.open(preview_file_path, FileAccess.WRITE)
 		file.store_string(file_data)
 		file.close()
+
+
+func summarize_media_counts_by_category():
+	var file = FileAccess.open(preview_file_path, FileAccess.READ)
+	if file == null:
+		return
+
+	var sections: Array[Dictionary] = []
+	var rx_h1_start = RegEx.create_from_string("<h1[^>]*>([^<]*)")
+	var rx_h1_id = RegEx.create_from_string("<h1[^>]*id\\s*=\\s*\"([^\"]+)\"[^>]*>")
+	var rx_h2_start = RegEx.create_from_string("<h2[^>]*>([^<]*)")
+	var valid_main_categories = ["lte-ps-test-high-band", "lte-ps-test-low-band"]
+
+	var h1_pending: bool = false
+	var h1_buffer: String = ""
+	var current_main: String = ""
+	var current_title = "Sin categoria"
+	var img_count = 0
+	var figure_count = 0
+	var table_count = 0
+	var started = false
+
+	var is_lte = get_file_type() == "LTE"
+
+	while !file.eof_reached():
+		var line = file.get_line()
+
+		# Handle multi-line <h1> tags
+		if h1_pending:
+			h1_buffer += line
+			if h1_buffer.find("</h1") == -1:
+				continue
+			line = h1_buffer
+			h1_pending = false
+			h1_buffer = ""
+
+		if line.contains("<h1"):
+			var h1_id_match = rx_h1_id.search(line)
+			var h1_match = rx_h1_start.search(line)
+			var last_main = current_main
+			if h1_id_match != null:
+				current_main = h1_id_match.get_string(1).strip_edges().to_lower()
+			elif h1_match != null:
+				current_main = h1_match.get_string(1).strip_edges().to_lower()
+			else:
+				if line.find("</h1") == -1:
+					h1_pending = true
+					h1_buffer = line
+					continue
+				current_main = line.strip_edges().to_lower()
+
+			if !valid_main_categories.has(current_main):
+				current_main = last_main
+			continue
+
+		if current_main.length() == 0 && is_lte:
+			continue
+
+		if line.find("<h2") != -1:
+			if started:
+				sections.append({
+					"main": current_main,
+					"title": current_title,
+					"imgs": img_count,
+					"figures": figure_count,
+					"tables": table_count
+				})
+
+			var h2_match = rx_h2_start.search(line)
+			if h2_match != null:
+				current_title = h2_match.get_string(1).strip_edges()
+			else:
+				current_title = line.strip_edges()
+
+			if current_title.find("Test Plan Information") != -1 \
+			|| current_title.find("LTE VoLTE Intermediate") != -1 \
+			|| current_title.find("LTE VoLTE") != -1 \
+			|| (!valid_main_categories.has(current_main) and is_lte):
+				started = false
+				img_count = 0
+				figure_count = 0
+				table_count = 0
+				continue
+
+			img_count = 0
+			figure_count = 0
+			table_count = 0
+			started = true
+			continue
+
+		if !started:
+			continue
+
+		img_count += line.count("<img")
+		figure_count += line.count("<p>Figure ")
+		table_count += line.to_lower().count("<table")
+
+	if started:
+		sections.append({
+			"main": current_main,
+			"title": current_title,
+			"imgs": img_count,
+			"figures": figure_count,
+			"tables": table_count
+		})
+
+	file.close()
+
+	if sections.size() == 0:
+		return
+
+	var last_category: String = ""
+
+	text_edit_commentaries.text += "\n\n##### MISSING IMAGES #####\n"
+
+	for section in sections:
+		if last_category != section.main:
+			last_category = section.main
+			text_edit_commentaries.text += "\n--------- %s ---------\n" % last_category.replace("-", " ").to_upper()
+
+		var diff = section.figures - (section.imgs + section.tables)
+
+		# skip
+		if diff == 0:
+			continue
+
+		if diff < 0:
+			push_error("Media count mismatch in section \"%s\"" % section["title"])
+			continue
+
+		text_edit_commentaries.text += "%s: %d\n" % [section.title, diff]
 
 
 func get_file_type() -> String:

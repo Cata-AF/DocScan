@@ -169,6 +169,7 @@ size_flags_horizontal = 3
 
 [node name="ProcessedFile" parent="CanvasLayer/HSplitContainer/PanelFilesProcessed/ScrollContainer/VBoxContainer" instance_placeholder="res://scenes/processed_file.tscn"]
 layout_mode = 2
+folded = true
 
 [node name="Label" type="Label" parent="CanvasLayer/HSplitContainer/PanelFilesProcessed"]
 layout_mode = 0

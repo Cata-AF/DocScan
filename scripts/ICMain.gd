@@ -31,6 +31,10 @@ func _ready() -> void:
 	bin_path = bin_path_format % get_working_dir_path()
 	temp_dir_path = temp_dir_path_format  % get_working_dir_path()
 
+	# Clean up temp dir
+	if DirAccess.dir_exists_absolute("temp_dir_path"):
+		OS.move_to_trash(temp_dir_path)
+
 	print("bin_path -> %s" % bin_path)
 	print("temp_dir_path -> %s" % temp_dir_path)
 
