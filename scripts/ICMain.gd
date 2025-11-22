@@ -20,7 +20,7 @@ var bin_path = ""
 var temp_dir_path = ""
 
 var pandoc_version = "3.8.2"
-var libreoffice_download_url = "https://appimages.libreitalia.org/LibreOffice-fresh.basic-x86_64.AppImage"
+var libreoffice_windows_version = "25.2.3"
 
 var docx_files: PackedStringArray = []
 var processed_files: Array[ICProcessedFile] = []
@@ -31,6 +31,10 @@ var files_processed: int = 0
 
 var download_running : bool = false
 var last_download_result
+
+######## DEBUG ########
+var simulate_windows_on_linux: bool = false
+#######################
 
 func _ready() -> void:
 	bin_path = bin_path_format % get_working_dir_path()
@@ -51,7 +55,7 @@ func _validate_requirements():
 	img_loading.visible = false
 	label_download_progress.visible = false
 	var has_pandoc = FileAccess.file_exists(get_pandoc_path())
-	var has_libreoffice = OS.get_name() != "Linux" or FileAccess.file_exists(get_libreoffice_path())
+	var has_libreoffice = FileAccess.file_exists(get_libreoffice_path())
 	download_requements_panel.visible = not (has_pandoc and has_libreoffice)
 
 
@@ -73,6 +77,8 @@ func _on_window_files_dropped(files: PackedStringArray) -> void:
 func _on_button_download_pressed() -> void:
 	btn_download_requirements.disabled = true
 	img_loading.visible = true
+
+	await get_tree().create_timer(.1).timeout
 	await _prepare_requirements()
 	btn_download_requirements.disabled = false
 	img_loading.visible = false
@@ -145,7 +151,9 @@ func _prepare_requirements():
 
 	# Download libreoffice
 	if not FileAccess.file_exists(libreoffice_path):
-		if OS.get_name() == "Linux":
+		var libreoffice_download_url = get_libreoffice_download_url()
+
+		if OS.get_name() == "Linux" and not simulate_windows_on_linux:
 			var libreoffice_request = HTTPRequest.new()
 
 			print("⚙️ Downloading LibreOffice from url: %s" % libreoffice_download_url)
@@ -185,7 +193,85 @@ func _prepare_requirements():
 
 			print("✅ LibreOffice has been successfully downloaded at: ", ProjectSettings.globalize_path(libreoffice_path))
 
-	download_requements_panel.visible = false
+		elif OS.get_name() == "Windows" or simulate_windows_on_linux:
+			# Download windows portable
+			var portable_path = get_libreoffice_windows_portable_path()
+			if not FileAccess.file_exists(portable_path):
+				var libreoffice_request = HTTPRequest.new()
+
+				print("⚙️ Downloading LibreOffice from url: %s" % libreoffice_download_url)
+
+				libreoffice_request.download_file = portable_path
+				add_child(libreoffice_request)
+
+				download_running = true
+				label_download_progress.visible = true
+				libreoffice_request.request(libreoffice_download_url)
+				libreoffice_request.request_completed.connect(_on_download_finish)
+
+				while download_running:
+					await get_tree().process_frame
+					var progress : float = float(libreoffice_request.get_downloaded_bytes()) / float(libreoffice_request.get_body_size())
+					label_download_progress.text = "%f %%" % (progress * 100)
+
+				label_download_progress.visible = false
+
+				if last_download_result[0] != OK:
+					push_error("❌ Error trying to download LibreOffice, err %d" % last_download_result[0])
+					return
+
+				if last_download_result[1] != HTTPClient.RESPONSE_OK:
+					push_error("❌ Error response %d when downloading LibreOffice" % last_download_result[1])
+					return
+
+				print("✅ LibreOffice has been successfully downloaded at: ", portable_path)
+
+			# unzip file
+			if not FileAccess.file_exists(libreoffice_path):
+				var office_out_dir = "%s/office" % bin_path
+				var output = []
+				print("⚙️ extracting %s" % portable_path)
+				await get_tree().create_timer(.1).timeout
+
+				if OS.get_name() == "Linux":
+					var test_7z = OS.execute("7z", ["--help"], output, true)
+					if test_7z != 0:
+						push_error("7z is not installed on this system.")
+						return false
+
+					var args = [
+						"x", portable_path,
+						"-o" + office_out_dir,
+						"-y"
+					]
+
+					var exit_code = OS.execute("7z", args, output, true)
+
+					if exit_code != 0:
+						push_error("Failed to extract using 7zip.")
+				else:
+					print("Platform: Windows - Using NSIS /extract")
+
+					var args = [
+						"/extract=" + office_out_dir,
+						"/quiet"
+					]
+
+					var exit_code = OS.execute(portable_path, args, output, true)
+
+					print("NSIS Output:", output)
+					print("Exit code:", exit_code)
+
+					if exit_code != 0:
+						push_error("Failed to extract using NSIS method.")
+						return false
+
+					return true
+
+
+				print("✅ %s extracted" % portable_path)
+
+	_validate_requirements()
 
 
 func get_pandoc_download_url():
@@ -210,7 +296,21 @@ func get_pandoc_path():
 	return "%s/pandoc-%s/pandoc.exe" % [bin_path, pandoc_version]
 
 
+func get_libreoffice_download_url():
+	if OS.get_name() == "Windows" or simulate_windows_on_linux:
+		return "https://download.documentfoundation.org/libreoffice/portable/%s/LibreOfficePortable_%s_MultilingualStandard.paf.exe" % [libreoffice_windows_version, libreoffice_windows_version]
+
+	return "https://appimages.libreitalia.org/LibreOffice-fresh.basic-x86_64.AppImage"
+
+
+func get_libreoffice_windows_portable_path():
+	return "%s/LibreOfficePortable_%s_MultilingualStandard.paf.exe" % [bin_path, libreoffice_windows_version]
+
+
 func get_libreoffice_path():
+	if OS.get_name() == "Windows" or simulate_windows_on_linux:
+		return "%s/office/App/libreoffice/program/soffice.com" % bin_path
+
 	return "%s/LibreOffice-fresh.basic-x86_64.AppImage" % bin_path
 
 
@@ -282,17 +382,26 @@ func process_file(docx_file_path: String, is_using_threads: bool):
 
 		var docx_file_global_path = "%s" % file_path if OS.get_name() == "Windows" else "%s" % file_path
 		var out_xml_file = out_xml_path if OS.get_name() == "Windows" else "\"%s\"" % out_xml_path
+		var docx_source_path = docx_file_global_path
+
+		if simulate_windows_on_linux:
+			OS.execute("winepath", ["-w", docx_source_path], output)
+			docx_source_path = "".join(output).replace("\n", "")
 
 		# conver docx to html & xml
 		print("⚙️ converting %s to html" % file_name)
-		var err = OS.execute(ProjectSettings.globalize_path(get_libreoffice_path()), [
+		var exec = "wine" if simulate_windows_on_linux else ProjectSettings.globalize_path(get_libreoffice_path())
+		var args : Array[String] = [
 			"--headless",
 			"--convert-to", "xhtml:XHTML Writer File",
 			"--outdir", temp_dir_path,
-			docx_file_global_path
-		], output, true)
+			docx_source_path
+		]
 
-		#print(output)
+		if simulate_windows_on_linux:
+			args.push_front(ProjectSettings.globalize_path(get_libreoffice_path()))
+
+		var err = OS.execute(exec, args, output, true)
 
 		if err != OK or len(output) > 0 and (output[0] as String).contains("Error: "):
 			push_error("error converting file to html \nfile: %s, \nfile_path: %s \n %s" % [file_name, docx_file_global_path, "".join(output)])
