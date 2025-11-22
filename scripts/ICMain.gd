@@ -7,6 +7,7 @@ extends Node
 @export var processed_files_container : VBoxContainer
 @export var files_dropped_list : ItemList
 @export var label_download_progress : Label
+@export var label_7zip : Label
 
 @export var panel_processed_files : Panel
 @export var label_files_processed : Label
@@ -31,6 +32,8 @@ var files_processed: int = 0
 
 var download_running : bool = false
 var last_download_result
+
+var seven_zip_windows_path = "C:/Program Files/7-Zip/7z.exe"
 
 ######## DEBUG ########
 var simulate_windows_on_linux: bool = false
@@ -57,6 +60,8 @@ func _validate_requirements():
 	var has_pandoc = FileAccess.file_exists(get_pandoc_path())
 	var has_libreoffice = FileAccess.file_exists(get_libreoffice_path())
 	download_requements_panel.visible = not (has_pandoc and has_libreoffice)
+	label_7zip.visible = not FileAccess.file_exists(seven_zip_windows_path)
+
 
 
 func _on_window_files_dropped(files: PackedStringArray) -> void:
@@ -91,6 +96,9 @@ func _prepare_requirements():
 
 	if not DirAccess.dir_exists_absolute(bin_path):
 		DirAccess.make_dir_absolute(bin_path)
+
+		var file = FileAccess.open("%s/.gdignore" % bin_path, FileAccess.WRITE)
+		file.close()
 
 	# Download pandoc
 	if not FileAccess.file_exists(zip_path):
@@ -233,41 +241,22 @@ func _prepare_requirements():
 				print("⚙️ extracting %s" % portable_path)
 				await get_tree().create_timer(.1).timeout
 
-				if OS.get_name() == "Linux":
-					var test_7z = OS.execute("7z", ["--help"], output, true)
-					if test_7z != 0:
-						push_error("7z is not installed on this system.")
-						return false
+				var test_7z = OS.execute(seven_zip_windows_path, ["--help"], output, true)
+				if test_7z != 0:
+					push_error("7z is not installed on this system.")
+					return false
 
-					var args = [
-						"x", portable_path,
-						"-o" + office_out_dir,
-						"-y"
-					]
+				var args = [
+					"x", portable_path,
+					"-o" + office_out_dir,
+					"-y"
+				]
 
-					var exit_code = OS.execute("7z", args, output, true)
+				var exit_code = OS.execute(seven_zip_windows_path, args, output, true)
 
-					if exit_code != 0:
-						push_error("Failed to extract using 7zip.")
-				else:
-					print("Platform: Windows - Using NSIS /extract")
-
-					var args = [
-						"/extract=" + office_out_dir,
-						"/quiet"
-					]
-
-					var exit_code = OS.execute(portable_path, args, output, true)
-
-					print("NSIS Output:", output)
-					print("Exit code:", exit_code)
-
-					if exit_code != 0:
-						push_error("Failed to extract using NSIS method.")
-						return false
-
-					return true
-
+				if exit_code != 0:
+					print("".join(output))
+					push_error("Failed to extract using 7zip.")
 
 				print("✅ %s extracted" % portable_path)
 
@@ -404,7 +393,7 @@ func process_file(docx_file_path: String, is_using_threads: bool):
 		var err = OS.execute(exec, args, output, true)
 
 		if err != OK or len(output) > 0 and (output[0] as String).contains("Error: "):
-			push_error("error converting file to html \nfile: %s, \nfile_path: %s \n %s" % [file_name, docx_file_global_path, "".join(output)])
+			push_error("error [%d] converting file to html \nfile: %s, \nfile_path: %s \n %s" % [err, file_name, docx_file_global_path, "".join(output)])
 			print_rich("[color=red]%s[/color]" % "".join(output))
 			break
 
@@ -419,6 +408,15 @@ func process_file(docx_file_path: String, is_using_threads: bool):
 		if err != OK:
 			push_error("error converting file to xml %s -> %s" % [file_name, "".join(output)])
 			break
+
+		if file_name.contains(" "):
+			var dir = DirAccess.open(temp_dir_path)
+			var out_file_name = file_name.replace(".docx", ".xhtml")
+
+			err = dir.rename(out_file_name, out_file_name.replace(" ", "_"))
+
+			if err != OK:
+				push_error("err moving file: ", err)
 
 		processed_file = scene_processed_file.instantiate() as ICProcessedFile
 		processed_file.setup(out_xhtml_path, out_xml_path)

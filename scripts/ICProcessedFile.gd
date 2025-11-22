@@ -347,7 +347,9 @@ func summarize_media_counts_by_category():
 		"LTE PS Test High Band",
 		"LTE PS Test Low Band",
 		"LTE VoLTE Intermediate Call Test High Band",
-		"LTE VoLTE Intermediate Call Test Low Band"
+		"LTE VoLTE Intermediate Call Test Low Band",
+		"UMTS Intermediate Call Test",
+		"UMTS FTP Test"
 	]
 
 	var current_main: String = ""
@@ -357,31 +359,31 @@ func summarize_media_counts_by_category():
 	var table_count = 0
 	var started = false
 
-	var is_lte = get_file_type() == "LTE"
-
 	while !file.eof_reached():
 		var line = file.get_line()
 
 		# Validate if is a main category
 		if line.contains("<h1") :
+
+			if started:
+				sections.append({
+					"main": current_main,
+					"title": current_title,
+					"imgs": img_count,
+					"figures": figure_count,
+					"tables": table_count
+				})
+
+				started = false
+
+
 			for category in valid_main_categories:
 				if line.contains(category):
-					if started:
-						sections.append({
-							"main": current_main,
-							"title": current_title,
-							"imgs": img_count,
-							"figures": figure_count,
-							"tables": table_count
-						})
-
-						started = false
-
 					current_main = category
 
 			continue
 
-		if current_main.length() == 0 && is_lte:
+		if current_main.length() == 0:
 			continue
 
 		# Validate sub category
@@ -427,7 +429,7 @@ func summarize_media_counts_by_category():
 			if (
 				current_title.contains("Test Plan Information") or
 				current_title.contains("LTE VoLTE Intermediate Call KPI Summary") or
-				(!valid_main_categories.has(current_main) and is_lte)
+				(!valid_main_categories.has(current_main))
 				):
 				continue
 
@@ -479,7 +481,7 @@ func summarize_media_counts_by_category():
 			continue
 
 		if diff < 0:
-			push_error("Media count mismatch in section \"%s\"" % section["title"])
+			push_error("Media count mismatch in section \"%s\", figures: %d, imgs: %d, tables: %d, file: %s" % [section["title"], section.figures, section.imgs, section.tables, file_name])
 			continue
 
 		text_edit_commentaries.text += "%s: %d\n" % [section.title, diff]

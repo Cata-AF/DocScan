@@ -46,7 +46,7 @@ _data = {
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1bvp3"]
 bg_color = Color(0, 0, 0, 0.7058824)
 
-[node name="main" type="Node" node_paths=PackedStringArray("download_requements_panel", "btn_download_requirements", "img_loading", "processed_files_container", "files_dropped_list", "label_download_progress", "panel_processed_files", "label_files_processed", "progress_bar_processed_files", "use_threads")]
+[node name="main" type="Node" node_paths=PackedStringArray("download_requements_panel", "btn_download_requirements", "img_loading", "processed_files_container", "files_dropped_list", "label_download_progress", "label_7zip", "panel_processed_files", "label_files_processed", "progress_bar_processed_files", "use_threads")]
 script = ExtResource("1_ig7tw")
 download_requements_panel = NodePath("CanvasLayer/PanelDependecies")
 btn_download_requirements = NodePath("CanvasLayer/PanelDependecies/ButtonDownload")
@@ -55,6 +55,7 @@ scene_processed_file = ExtResource("2_h2yge")
 processed_files_container = NodePath("CanvasLayer/HSplitContainer/PanelFilesProcessed/ScrollContainer/VBoxContainer")
 files_dropped_list = NodePath("CanvasLayer/HSplitContainer/PanelFilesDropped/ItemList")
 label_download_progress = NodePath("CanvasLayer/PanelDependecies/LabelDownloadProgress")
+label_7zip = NodePath("CanvasLayer/PanelDependecies/Label7Zip")
 panel_processed_files = NodePath("CanvasLayer/PanelProcessedFiled")
 label_files_processed = NodePath("CanvasLayer/PanelProcessedFiled/LabelProcessedFiles")
 progress_bar_processed_files = NodePath("CanvasLayer/PanelProcessedFiled/ProgressBar")
@@ -108,6 +109,15 @@ offset_top = 17.0
 offset_right = 424.0
 offset_bottom = 40.0
 text = "10%"
+
+[node name="Label7Zip" type="Label" parent="CanvasLayer/PanelDependecies"]
+layout_mode = 0
+offset_left = 11.0
+offset_top = 36.0
+offset_right = 221.0
+offset_bottom = 59.0
+theme_override_colors/font_color = Color(1, 0, 0.19215687, 1)
+text = "7zip is required in windows"
 
 [node name="HSplitContainer" type="HSplitContainer" parent="CanvasLayer"]
 anchors_preset = 14
@@ -265,7 +275,7 @@ offset_top = 22.0
 offset_right = -19.0
 offset_bottom = 53.0
 grow_horizontal = 0
-button_pressed = true
+disabled = true
 text = "Use threads"
 
 [connection signal="pressed" from="CanvasLayer/PanelDependecies/ButtonDownload" to="." method="_on_button_download_pressed"]
