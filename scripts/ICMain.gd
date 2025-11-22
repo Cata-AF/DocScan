@@ -44,7 +44,7 @@ func _ready() -> void:
 	temp_dir_path = temp_dir_path_format  % get_working_dir_path()
 
 	# Clean up temp dir
-	if DirAccess.dir_exists_absolute("temp_dir_path") and not OS.has_feature("editor"):
+	if DirAccess.dir_exists_absolute(temp_dir_path) and not OS.has_feature("editor"):
 		OS.move_to_trash(temp_dir_path)
 
 	print("bin_path -> %s" % bin_path)
