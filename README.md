@@ -14,10 +14,10 @@ Herramienta Godot 4.5 para validar reportes DOCX. Descarga Pandoc y LibreOffice 
 flowchart LR
     U[Usuario arrastra .docx] --> M[ICMain.gd]
     M -->|Descarga/valida| D[bin/Pandoc + LibreOffice]
-    M -->|Convierte| C[DOCX -> XHTML + XML en temp/]
+    M -->|Convierte| C["DOCX → XHTML y XML en temp/"]
     C --> P[ICProcessedFile.gd]
-    P -->|Analiza| R[Comentarios (KPI, imagenes, figuras)]
-    P -->|Abre| N[Navegador con XHTML]
+    P -->|Analiza| R["Comentarios: KPI, imagenes, figuras"]
+    P -->|Abre| N["Navegador con XHTML"]
 ```
 
 ## Estructura del proyecto
