@@ -678,6 +678,13 @@ func summarize_media_counts_by_category():
 			last_category = section.main
 			text_edit_commentaries.text += "\n--------- %s ---------\n" % last_category.replace("-", " ").to_upper()
 
+		var abnormal_missing = 0
+		if section.main == "UMTS FTP Test" and section.title.to_lower().contains("abnormal events"):
+			var expected_imgs = 2
+			abnormal_missing = expected_imgs - section.imgs
+			if abnormal_missing > 0:
+				text_edit_commentaries.text += "%s: %d\n" % [section.title, abnormal_missing,]
+
 		var diff = section.figures - (section.imgs + section.tables)
 
 		# skip
