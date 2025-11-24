@@ -215,7 +215,6 @@ func validate_integrity_lte() -> Array[String]:
 
 					if value < 100:
 						commentaries.append("In %s present LTE Handover fail event" % last_band)
-
 	return commentaries
 
 
@@ -229,6 +228,7 @@ func validate_integrity_umts()  -> Array[String]:
 	var found_rscp_avg: bool = false
 	var found_ecio_avg: bool = false
 	var found_sc_wdma_call_drop: bool = false
+	var found_sc_sho_success_rate: bool = false
 	var found_sho_success_rate: bool = false
 
 	for i in len(tables_xml):
@@ -248,9 +248,10 @@ func validate_integrity_umts()  -> Array[String]:
 
 			if row_title == RSCP_AVG && !found_rscp_avg:
 				var value_text = row_value.replace("%", "")
-				if value_text.is_valid_float():
-					found_rscp_avg = true
-
+				found_rscp_avg = true
+				if value_text.is_empty():
+					commentaries.append("No information was made or found of RSCP.")
+				elif value_text.is_valid_float():
 					var value = value_text.to_float()
 					var label = ""
 
@@ -261,13 +262,14 @@ func validate_integrity_umts()  -> Array[String]:
 					else:
 						label = "good levels"
 
-					commentaries.append("[%s] %s." % [RSCP_AVG, label])
+					commentaries.append("The RSCP average has %s." % label)
 
 			if row_title == ECIO_AVG && !found_ecio_avg:
 				var value_text = row_value.replace("%", "")
-				if value_text.is_valid_float():
-					found_ecio_avg = true
-
+				found_ecio_avg = true
+				if value_text.is_empty():
+					commentaries.append("No information was made or found of Ec/Io.")
+				elif value_text.is_valid_float():
 					var value = value_text.to_float()
 					var label = ""
 
@@ -278,24 +280,32 @@ func validate_integrity_umts()  -> Array[String]:
 					else:
 						label = "good levels"
 
-					commentaries.append("[%s] %s." % [ECIO_AVG, label])
+					commentaries.append("The Ec/Io average has %s." % label)
 
 			if row_title == SC_WCDMA_CALL_DROP_RATE && !found_sc_wdma_call_drop:
 				var value_text = row_value.replace("%", "")
-				if value_text.is_valid_float():
-					found_sc_wdma_call_drop = true
+				found_sc_wdma_call_drop = true
+				if value_text.is_empty():
+					commentaries.append("No information was made or found of WCDMA call dropped in CS Test")
+				elif value_text.is_valid_float():
 					var value = value_text.to_float()
 
 					if value > 0:
-						commentaries.append("[%s] WCDMA call dropped event ocurred. (%s%%)" % [SC_WCDMA_CALL_DROP_RATE, value_text])
+						commentaries.append("WCDMA call dropped event ocurred in CS Intermediate Call Test.")
 
-			if row_title == SC_SHO_SUCCESS_RATE:
+			if row_title == SC_SHO_SUCCESS_RATE and not found_sc_sho_success_rate:
+				found_sc_sho_success_rate = true
 				var value_text = row_value.replace("%", "")
 				if value_text.is_valid_float():
 					var value = value_text.to_float()
 
 					if value < 100:
-						commentaries.append("[%s] WCDMA call dropped event ocurred. (%s%%)" % [SC_SHO_SUCCESS_RATE, value_text])
+						commentaries.append("WCDMA soft handover fail event ocurred in CS Intermediate Call Test.")
+				else:
+					if value_text.is_empty():
+						commentaries.append("No information was made or found of WCDMA SHO in CS Test.")
+					else:
+						commentaries.append("No valid SC SHO Success Rate value was found.")
 
 			if row_title == SHO_SUCCESS_RATE and not found_sho_success_rate:
 				found_sho_success_rate = true
@@ -305,11 +315,10 @@ func validate_integrity_umts()  -> Array[String]:
 					var value = value_text.to_float()
 
 					if value < 100:
-						commentaries.append("[%s] WCDMA call dropped event ocurred. (%s%%)" % [SHO_SUCCESS_RATE, value_text])
+						commentaries.append("WCDMA soft handover fail event ocurred in PS Test.")
 				else:
 					if value_text.is_empty():
-						commentaries.append("[%s] was not made or information wasn't found." % [SHO_SUCCESS_RATE])
-
+						commentaries.append("No information was made or found of WCDMA SHO in PS Test")
 	return commentaries
 
 
