@@ -107,6 +107,8 @@ func validate_integrity_lte() -> Array[String]:
 
 	var last_band = ""
 	var intra_freq_found = false
+	var volte_call_drop_reported := {}
+
 
 	for i in len(tables_xml):
 		var table : XMLNode = tables_xml[i]
@@ -193,6 +195,12 @@ func validate_integrity_lte() -> Array[String]:
 				commentaries.append("In %s the SINR average has %s" % [last_band, label])
 
 			if row_title == VOLTE_CALL_DROP:
+				if last_band.is_empty():
+					continue
+
+				if volte_call_drop_reported.has(last_band):
+					continue
+
 				var value_text = row_value.replace("%", "")
 				if value_text.is_empty():
 					commentaries.append("No information was made or found of VoLTE Call Drop in %s." % last_band)
@@ -201,6 +209,8 @@ func validate_integrity_lte() -> Array[String]:
 
 					if value > 0:
 						commentaries.append("In %s present Voice call drop event" % last_band)
+
+					volte_call_drop_reported[last_band] = true
 
 			if row_title == INFRAFREQ_HO:
 				if intra_freq_found:
