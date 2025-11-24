@@ -8,6 +8,7 @@ var preview_file_path: String
 var file_xml_path: String
 var file_name : String = ""
 var site_code: String = ""
+var operator_code: String = ""
 
 const TOTAL_NBR_OF_APP = "Total Nbr. of Application (FTP UL) Success"
 const SITE_CODE_PATTERN = "[A-Z]{1,5}\\d{3,5}"
@@ -38,6 +39,7 @@ func setup(preview_html_path: String, doc_xml_path):
 	file_xml_path = doc_xml_path
 	title = file_name
 	site_code = get_site_code_from_filename(file_name)
+	operator_code = get_operator_from_filename(file_name)
 
 
 func validate_integrity():
@@ -47,6 +49,8 @@ func validate_integrity():
 	# Extract site code if not already set
 	if site_code.is_empty():
 		site_code = get_site_code_from_filename(file_name)
+	if operator_code.is_empty():
+		operator_code = get_operator_from_filename(file_name)
 
 	if get_file_type() == "LTE":
 		commentaries = validate_integrity_lte()
@@ -70,6 +74,22 @@ func get_site_code_from_filename(name: String) -> String:
 	if match != null:
 		return match.get_string(0)
 	return ""
+
+
+func get_operator_from_filename(name: String) -> String:
+	var base = name
+	var dot_index = base.rfind(".")
+	if dot_index != -1:
+		base = base.substr(0, dot_index)
+	base = base.to_upper()
+
+	var rx = RegEx.create_from_string("[A-Z]+")
+	var matches = rx.search_all(base)
+	if matches.size() == 0:
+		return ""
+
+	# Return the last contiguous letters block as operator code
+	return matches[matches.size() - 1].get_string(0)
 
 
 func validate_integrity_lte() -> Array[String]:
@@ -327,7 +347,17 @@ func set_commentaries(commentaries: Array[String]):
 	var file_data = FileAccess.get_file_as_string(preview_file_path)
 	var rx_added_comments = RegEx.create_from_string(comment_integrity_checked)
 
+	# Update header paragraphs before injecting comments
+	if get_file_type() == "LTE":
+		file_data = apply_lte_paragraph_overrides(file_data)
+	else:
+		file_data = apply_umts_paragraph_overrides(file_data)
+	file_data = apply_title_override(file_data)
+
 	if rx_added_comments.search(file_data) != null:
+		var file_existing = FileAccess.open(preview_file_path, FileAccess.WRITE)
+		file_existing.store_string(file_data)
+		file_existing.close()
 		return
 
 	# Update html to add the comments
@@ -357,6 +387,115 @@ func set_commentaries(commentaries: Array[String]):
 	var file = FileAccess.open(preview_file_path, FileAccess.WRITE)
 	file.store_string(file_data)
 	file.close()
+
+
+func apply_lte_paragraph_overrides(file_data: String) -> String:
+	var rx_p7 = RegEx.create_from_string("<p class=\"paragraph-P7\">.*?</p>")
+	var matches = rx_p7.search_all(file_data)
+
+	if matches.size() < 3:
+		return file_data
+
+	# Already processed
+	if matches[1].get_string(0).find("[CONTRACT NUMBER]") != -1:
+		return file_data
+
+	var base_style = "color: #666699; font-family: Arial; font-size: 11pt; font-style: italic; font-weight: bold;"
+	var contract_p = "<p class=\"paragraph-P7\" style=\"%s\">[CONTRACT NUMBER]</p>" % base_style
+	var id_p = "<p class=\"paragraph-P7\" style=\"%s\">[0001702410300A]</p>" % base_style
+
+	var site_text = site_code
+	if site_text.is_empty():
+		site_text = "[SITE]"
+	elif operator_code.is_empty():
+		site_text = "[%s]" % site_code
+	else:
+		site_text = "[%s %s]" % [site_code, operator_code]
+
+	var site_p = "<p class=\"paragraph-P7\" style=\"%s\">%s</p>" % [base_style, site_text]
+
+	var rebuilt = ""
+	var last_index = 0
+
+	for i in len(matches):
+		var m = matches[i]
+		var start = m.get_start()
+		var end = m.get_end()
+
+		rebuilt += file_data.substr(last_index, start - last_index)
+
+		if i == 1:
+			rebuilt += contract_p
+		elif i == 2:
+			rebuilt += id_p
+			rebuilt += site_p
+		else:
+			rebuilt += m.get_string(0)
+
+		last_index = end
+
+	rebuilt += file_data.substr(last_index)
+
+	return rebuilt
+
+
+func apply_umts_paragraph_overrides(file_data: String) -> String:
+	var rx_p8 = RegEx.create_from_string("<p class=\"paragraph-P8\">.*?</p>")
+	var rx_p9 = RegEx.create_from_string("<p class=\"paragraph-P9\">.*?</p>")
+
+	var first_p8 = rx_p8.search(file_data)
+	if first_p8 == null:
+		return file_data
+
+	var next_p9 = rx_p9.search(file_data, first_p8.get_end())
+	if next_p9 == null:
+		return file_data
+
+	if next_p9.get_string(0).find("[CONTRACT NUMBER]") != -1:
+		return file_data
+
+	var base_style = "color: #666699; font-family: Arial; font-size: 11pt; font-style: italic; font-weight: bold;"
+	var contract_p = "<p class=\"paragraph-P9\" style=\"%s\">[CONTRACT NUMBER]</p>" % base_style
+	var id_p = "<p class=\"paragraph-P9\" style=\"%s\">[0001702410300A]</p>" % base_style
+
+	var start = next_p9.get_start()
+	var end = next_p9.get_end()
+
+	return file_data.substr(0, start) + contract_p + id_p + file_data.substr(end)
+
+
+func apply_title_override(file_data: String) -> String:
+	var rx_title = RegEx.create_from_string("<title\\s+xml:lang=\"en-US\">.*?</title>")
+	var title_match = rx_title.search(file_data)
+	if title_match == null:
+		return file_data
+
+	var title_text = build_title_text()
+	var replacement = "<title xml:lang=\"en-US\">%s</title>" % title_text
+
+	return file_data.substr(0, title_match.get_start()) + replacement + file_data.substr(title_match.get_end())
+
+
+func build_title_text() -> String:
+	var parts: Array[String] = []
+
+	if site_code.is_empty():
+		parts.append("[SITE]")
+	else:
+		parts.append(site_code)
+
+	var doc_type = get_file_type()
+	if doc_type.length() > 0:
+		parts.append(doc_type)
+	else:
+		parts.append("[TYPE]")
+
+	if operator_code.is_empty():
+		parts.append("[OPERATOR]")
+	else:
+		parts.append(operator_code)
+
+	return " ".join(parts)
 
 
 func verify_broken_images():
