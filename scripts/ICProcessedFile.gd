@@ -7,8 +7,10 @@ class_name ICProcessedFile
 var preview_file_path: String
 var file_xml_path: String
 var file_name : String = ""
+var site_code: String = ""
 
 const TOTAL_NBR_OF_APP = "Total Nbr. of Application (FTP UL) Success"
+const SITE_CODE_PATTERN = "[A-Z]{1,5}\\d{3,5}"
 
 # LTE
 const CLUSTER_RSRP_AVERAGE = "CLUSTER RSRP Average"
@@ -35,11 +37,16 @@ func setup(preview_html_path: String, doc_xml_path):
 	preview_file_path = preview_html_path
 	file_xml_path = doc_xml_path
 	title = file_name
+	site_code = get_site_code_from_filename(file_name)
 
 
 func validate_integrity():
 
 	var commentaries: Array[String] = []
+
+	# Extract site code if not already set
+	if site_code.is_empty():
+		site_code = get_site_code_from_filename(file_name)
 
 	if get_file_type() == "LTE":
 		commentaries = validate_integrity_lte()
@@ -55,6 +62,14 @@ func get_node_deepest_content(xml_node: XMLNode) -> String:
 		return get_node_deepest_content(xml_node.children[0])
 
 	return xml_node.content
+
+
+func get_site_code_from_filename(name: String) -> String:
+	var rx = RegEx.create_from_string(SITE_CODE_PATTERN)
+	var match = rx.search(name.to_upper())
+	if match != null:
+		return match.get_string(0)
+	return ""
 
 
 func validate_integrity_lte() -> Array[String]:
@@ -99,11 +114,17 @@ func validate_integrity_lte() -> Array[String]:
 
 			# Real LTE conditions
 			if row_title == TOTAL_NBR_OF_APP:
-				if len(row_value) == 0 or row_value == "0":
-					commentaries.append("[%s:Statics] No information was made or found." % last_band)
+				if row_value == "0":
+					commentaries.append("The statics in %s there is no throughput because there was no UL carrier establishment." % last_band)
+				elif row_value.is_empty():
+					commentaries.append("No information was made or found of statics in %s." % last_band)
 
 			if row_title == CLUSTER_RSRP_AVERAGE:
 				if cluster_values_found >= 4: # all values were found
+					continue
+
+				if row_value.is_empty():
+					commentaries.append("No information was made or found of RSRP in %s." % last_band)
 					continue
 
 				var value: float = row_value.to_float()
@@ -124,9 +145,13 @@ func validate_integrity_lte() -> Array[String]:
 					remaining_high_cluster_avg -= 1
 					cluster_values_found += 1
 
-				commentaries.append("[%s:%s] se encuentra en: %s" % [last_band, CLUSTER_RSRP_AVERAGE, label])
+				commentaries.append("In %s the RSRP average has %s" % [last_band, label])
 
 			if row_title == CLUSTER_SINR_AVERAGE:
+				if row_value.is_empty():
+					commentaries.append("No information was made or found of SINR in %s." % last_band)
+					continue
+
 				var value: float = row_value.to_float()
 				var label: String = ""
 
@@ -145,27 +170,31 @@ func validate_integrity_lte() -> Array[String]:
 					remaining_high_cluster_avg -= 1
 					cluster_values_found += 1
 
-				commentaries.append("[%s:%s] se encuentra en: %s" % [last_band, CLUSTER_SINR_AVERAGE, label])
+				commentaries.append("In %s the SINR average has %s" % [last_band, label])
 
 			if row_title == VOLTE_CALL_DROP:
 				var value_text = row_value.replace("%", "")
-				if value_text.is_valid_float():
+				if value_text.is_empty():
+					commentaries.append("No information was made or found of VoLTE Call Drop in %s." % last_band)
+				elif value_text.is_valid_float():
 					var value = value_text.to_float()
 
 					if value > 0:
-						commentaries.append("[%s:VOLTE_CALL_DROP_RATE] Voice call drop event ocurred" % last_band)
+						commentaries.append("In %s present Voice call drop event" % last_band)
 
 			if row_title == INFRAFREQ_HO:
 				if intra_freq_found:
 					continue
 
 				var value_text = row_value.replace("%", "")
-				if value_text.is_valid_float():
+				if value_text.is_empty():
+					commentaries.append("No information was made or found of IntraFreq HO in %s." % last_band)
+				elif value_text.is_valid_float():
 					intra_freq_found = true
 					var value = value_text.to_float()
 
 					if value < 100:
-						commentaries.append("[%s:INTRA_FREQ_HO] LTE Handover fail" % last_band)
+						commentaries.append("In %s present LTE Handover fail event" % last_band)
 
 	return commentaries
 
@@ -196,11 +225,6 @@ func validate_integrity_umts()  -> Array[String]:
 			var row_value = get_node_deepest_content(row.children[1])
 
 			#print("%s = %s" % [row_title, row_value])
-
-			# Real LTE conditions
-			if row_title == TOTAL_NBR_OF_APP:
-				if len(row_value) == 0 or row_value == "0":
-					commentaries.append("[Statics] No information was made or found.")
 
 			if row_title == RSCP_AVG && !found_rscp_avg:
 				var value_text = row_value.replace("%", "")
@@ -271,14 +295,32 @@ func validate_integrity_umts()  -> Array[String]:
 
 func set_commentaries(commentaries: Array[String]):
 	#print("-------------commentaries")
+	var missing_info: Array[String] = []
+	var normal_comments: Array[String] = []
+
+	for commentary in commentaries:
+		if commentary.begins_with("No information was made or found"):
+			missing_info.append(commentary)
+		else:
+			normal_comments.append(commentary)
+
 	text_edit_commentaries.text = ""
-	for i in len(commentaries):
-		var commentary = commentaries[i]
-		#print("    %s" % commentary)
+
+	for i in len(normal_comments):
+		var commentary = normal_comments[i]
 		text_edit_commentaries.text += commentary
 
-		if i + 1 < len(commentaries):
+		if i + 1 < len(normal_comments):
 			text_edit_commentaries.text += "\n"
+
+	if missing_info.size() > 0:
+		if text_edit_commentaries.text.length() > 0:
+			text_edit_commentaries.text += "\n\n"
+		text_edit_commentaries.text += "NO INFORMATION FOUND\n"
+		for i in len(missing_info):
+			text_edit_commentaries.text += missing_info[i]
+			if i + 1 < len(missing_info):
+				text_edit_commentaries.text += "\n"
 
 	# Set commentaries in the html
 	const comment_integrity_checked = "Integrity Check Comments"
@@ -289,10 +331,24 @@ func set_commentaries(commentaries: Array[String]):
 		return
 
 	# Update html to add the comments
-	var new_html = "<h2>Integrity Check Comments</h2>\n"
+	var table_html = "<table style=\"border:1px solid black;\">\n"
+	table_html += "<tr>\n"
+	table_html += "	<th style=\"border:1px solid black; background-color: #ffff00; width: 103px; font-size: 10.5pt; font-weight: bold; text-align: center;\">Site Name</th>\n"
+	table_html += "	<th style=\"border:1px solid black; background-color: #ffff00; width: 270px; font-size: 10.5pt; font-weight: bold; text-align: center;\">DUID</th>\n"
+	table_html += "</tr>\n"
 
-	for c in commentaries:
-		new_html += "<p>- %s</p>\n" % c
+	table_html += "<tr>\n"
+	table_html += "	<td style=\"border:1px solid black; font-size: 10.5pt; text-align: left;\">&nbsp;&nbsp;%s</td>\n" % site_code
+	table_html += "	<td style=\"border:1px solid black; font-size: 10.5pt; text-align: left;\"></td>\n"
+	table_html += "</tr>\n"
+	table_html += "</table>\n"
+
+	table_html += "<br/>\n"
+
+	var new_html = "<span style=\"font-size: 12pt; font-weight: bold;\">Site List:</span>\n %s <span style=\"font-size: 12pt; font-weight: bold;\">RF conditions analysis, suggestions and comments:</span>\n" % table_html
+
+	for c in normal_comments:
+		new_html += "<p style=\"font-size: 10.5pt;\">-&nbsp;&nbsp;&nbsp;&nbsp; %s</p>\n" % c
 
 	new_html += "</body>"
 
