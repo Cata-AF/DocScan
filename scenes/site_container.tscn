@@ -1,0 +1,31 @@
+[gd_scene load_steps=2 format=3 uid="uid://dee5q6v8k0rcb"]
+
+[ext_resource type="Script" uid="uid://cfdycdbyafiub" path="res://scenes/ICSiteContainer.gd" id="1_qt02d"]
+
+[node name="SiteContainer" type="FoldableContainer" node_paths=PackedStringArray("container")]
+folded = true
+title = "[SITE_ID]"
+script = ExtResource("1_qt02d")
+container = NodePath("MarginContainer/VBoxContainer")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 0
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Button" type="Button" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 8
+text = "  Export all...  "
+
+[node name="ProcessedFile" parent="MarginContainer/VBoxContainer" instance_placeholder="res://scenes/processed_file.tscn"]
+layout_mode = 2
+
+[connection signal="pressed" from="MarginContainer/VBoxContainer/Button" to="." method="_on_button_pressed"]

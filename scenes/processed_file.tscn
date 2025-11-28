@@ -26,6 +26,11 @@ layout_mode = 2
 theme_override_styles/normal = ExtResource("2_txc0r")
 text = "Open in browser"
 
+[node name="ButtonDownloadFixed" type="Button" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_styles/normal = ExtResource("2_txc0r")
+text = "Generated Fixed"
+
 [node name="Label" type="Label" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
 text = "Commentaries:"
@@ -41,3 +46,4 @@ panqui panqui"
 editable = false
 
 [connection signal="pressed" from="MarginContainer/VBoxContainer/ButtonOpenInBrowser" to="." method="_on_button_open_in_browser_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ButtonDownloadFixed" to="." method="export_fixed_docx"]

@@ -7,6 +7,7 @@ class_name ICProcessedFile
 var preview_file_path: String
 var file_xml_path: String
 var file_name : String = ""
+var docx_file_path: String = ""
 var site_code: String = ""
 var operator_code: String = ""
 
@@ -32,20 +33,23 @@ const HIGH_BAND = "High Band"
 const LOW_BAND_CLUSTER_AVERAGE = "INTERMEDIATE CALL TEST Drive Test Low Band"
 const HIGH_BAND_CLUSTER_AVERAGE = "INTERMEDIATE CALL TEST Drive Test High Band"
 
+var main: ICMain;
+var commentaries: Array[String] = []
 
-func setup(preview_html_path: String, doc_xml_path):
+signal on_finish_export
+
+func setup(preview_html_path: String, doc_xml_path: String, word_file_path: String, m: ICMain):
+	main = m
 	file_name = preview_html_path.get_file();
 	preview_file_path = preview_html_path
+	docx_file_path = word_file_path
 	file_xml_path = doc_xml_path
 	title = file_name
-	site_code = get_site_code_from_filename(file_name)
+	site_code = get_site_code_from_filename(word_file_path.get_file())
 	operator_code = get_operator_from_filename(file_name)
 
 
 func validate_integrity():
-
-	var commentaries: Array[String] = []
-
 	# Extract site code if not already set
 	if site_code.is_empty():
 		site_code = get_site_code_from_filename(file_name)
@@ -68,28 +72,21 @@ func get_node_deepest_content(xml_node: XMLNode) -> String:
 	return xml_node.content
 
 
-func get_site_code_from_filename(name: String) -> String:
-	var rx = RegEx.create_from_string(SITE_CODE_PATTERN)
-	var match = rx.search(name.to_upper())
-	if match != null:
-		return match.get_string(0)
-	return ""
+func get_site_code_from_filename(n: String) -> String:
+	if get_file_type() == "LTE":
+		return n.split("LTE")[1].split(" ")[0].trim_prefix(" ").trim_suffix(" ")
+
+	# UMTS
+	return n.split("UMTS")[1].trim_prefix(" ").split(" ")[0]
 
 
-func get_operator_from_filename(name: String) -> String:
-	var base = name
-	var dot_index = base.rfind(".")
-	if dot_index != -1:
-		base = base.substr(0, dot_index)
-	base = base.to_upper()
-
-	var rx = RegEx.create_from_string("[A-Z]+")
-	var matches = rx.search_all(base)
-	if matches.size() == 0:
-		return ""
-
-	# Return the last contiguous letters block as operator code
-	return matches[matches.size() - 1].get_string(0)
+func get_operator_from_filename(n: String) -> String:
+	if n.get_file().contains("TEF"):
+		return "TEF"
+	if n.get_file().contains("TIGO"):
+		return "TIGO"
+	else:
+		return "UNKNOWN"
 
 
 func validate_integrity_lte() -> Array[String]:
@@ -98,7 +95,7 @@ func validate_integrity_lte() -> Array[String]:
 	var blocks_xml: XMLNode = parser.root.get_child_by_name("blocks")
 	var tables_xml: Array[XMLNode] = blocks_xml.get_children_by_name("Table")
 
-	var commentaries: Array[String] = []
+	commentaries = []
 
 	var remaining_low_cluster_avg = 0
 	var remaining_high_cluster_avg = 0
@@ -225,6 +222,7 @@ func validate_integrity_lte() -> Array[String]:
 
 					if value < 100:
 						commentaries.append("In %s present LTE Handover fail event" % last_band)
+
 	return commentaries
 
 
@@ -233,7 +231,7 @@ func validate_integrity_umts()  -> Array[String]:
 	var blocks_xml: XMLNode = parser.root.get_child_by_name("blocks")
 	var tables_xml: Array[XMLNode] = blocks_xml.get_children_by_name("Table")
 
-	var commentaries: Array[String] = []
+	commentaries = []
 
 	var found_rscp_avg: bool = false
 	var found_ecio_avg: bool = false
@@ -332,12 +330,11 @@ func validate_integrity_umts()  -> Array[String]:
 	return commentaries
 
 
-func set_commentaries(commentaries: Array[String]):
-	#print("-------------commentaries")
+func set_commentaries(comments: Array[String]):
 	var missing_info: Array[String] = []
 	var normal_comments: Array[String] = []
 
-	for commentary in commentaries:
+	for commentary in comments:
 		if commentary.begins_with("No information was made or found"):
 			missing_info.append(commentary)
 		else:
@@ -401,7 +398,7 @@ func set_commentaries(commentaries: Array[String]):
 
 	new_html += "</body>"
 
-	file_data = file_data.replace("</body>", new_html)
+	file_data += "\n%s" % new_html
 
 	var file = FileAccess.open(preview_file_path, FileAccess.WRITE)
 	file.store_string(file_data)
@@ -556,7 +553,6 @@ func summarize_media_counts_by_category():
 		return
 
 	var sections: Array[Dictionary] = []
-	var rx_h2_start = RegEx.create_from_string("<h2[^>]*>(.*?)</h2>")
 	var valid_main_categories = [
 		"LTE PS Test High Band",
 		"LTE PS Test Low Band",
@@ -573,13 +569,15 @@ func summarize_media_counts_by_category():
 	var table_count = 0
 	var started = false
 
+	var building_h1 : bool = false
+	var building_h2 : bool = false
+
 	while !file.eof_reached():
 		var line = file.get_line()
 
-		# Validate if is a main category
-		if line.contains("<h1") :
+		if line.contains("<h1>"):
 
-			if started:
+			if len(current_main) > 0 and len(current_title) > 0:
 				sections.append({
 					"main": current_main,
 					"title": current_title,
@@ -588,90 +586,77 @@ func summarize_media_counts_by_category():
 					"tables": table_count
 				})
 
-				started = false
+				img_count = 0
+				figure_count = 0
+				table_count = 0
 
+			current_main = ""
+			building_h1 = true
+			continue
+		elif line.contains("</h1>"):
+			building_h1 = false
+			continue
+
+		if line.contains("<h2>"):
+
+			if len(current_main) > 0 and len(current_title) > 0:
+				sections.append({
+					"main": current_main,
+					"title": current_title,
+					"imgs": img_count,
+					"figures": figure_count,
+					"tables": table_count
+				})
+
+				img_count = 0
+				figure_count = 0
+				table_count = 0
+
+			current_title = ""
+			building_h2 = true
+			started = false
+			continue
+		elif line.contains("</h2>"):
+			if len(current_main) > 0 and len(current_title) > 0:
+				started = true
+			building_h2 = false
+			continue
+
+
+		if building_h1:
+			if line.contains("<"): # It's a tag, skip
+				continue
+
+			var is_valid: bool = false
 
 			for category in valid_main_categories:
 				if line.contains(category):
-					current_main = category
+					is_valid = true
+					break
 
-			continue
+			if is_valid:
+				current_main = line
 
-		if current_main.length() == 0:
-			continue
 
-		# Validate sub category
-		if line.contains("<h2"):
-
-			# Add previous registry
-			if started:
-				sections.append({
-					"main": current_main,
-					"title": current_title,
-					"imgs": img_count,
-					"figures": figure_count,
-					"tables": table_count
-				})
-
-			started = false
-			img_count = 0
-			figure_count = 0
-			table_count = 0
-
-			# get h2 content
-			var h2_match = rx_h2_start.search(line)
-			if h2_match == null:
+		if building_h2:
+			if line.contains("<"): # It's a tag, skip
 				continue
 
-			var parser : XMLDocument = XML.parse_str(h2_match.get_string(0))
-			var a_element : XMLNode = parser.root.get_child_by_name("a")
-
-			if a_element == null or len(a_element.children) == 0:
-				continue
-
-			# build title name
-			var title_name : String = ""
-
-			for xml_node in a_element.children:
-				if xml_node.name != "span":
-					continue
-
-				title_name += xml_node.content
-
-			current_title = title_name
-
-			if (
-				current_title.contains("Test Plan Information") or
-				current_title.contains("LTE VoLTE Intermediate Call KPI Summary") or
-				(!valid_main_categories.has(current_main))
-				):
-				continue
-
-			started = true
+			current_title = line
 			continue
 
-		if !started:
-			continue
 
-		# count img_titles an images
-		img_count += line.count("<img")
-		table_count += line.to_lower().count("<table")
+		if started:
+			# count img_titles an images
+			img_count += line.count("<img")
+			table_count += line.to_lower().count("<table")
 
-		if line.contains("Serving PCI"):
-			if not line.contains("Chart:"):
-				figure_count += line.count(">Figure ")
-		else:
-			figure_count += line.count(">Figure ")
+			if line.contains("Serving PCI"):
+				if not line.contains("Chart:"):
+					figure_count += line.count(" Figure ")
+			else:
+				figure_count += line.count(" Figure ")
 
-	# Add latest registry
-	if started:
-		sections.append({
-			"main": current_main,
-			"title": current_title,
-			"imgs": img_count,
-			"figures": figure_count,
-			"tables": table_count
-		})
 
 	file.close()
 
@@ -702,7 +687,7 @@ func summarize_media_counts_by_category():
 			continue
 
 		if diff < 0:
-			push_error("Media count mismatch in section \"%s\", figures: %d, imgs: %d, tables: %d, file: %s" % [section["title"], section.figures, section.imgs, section.tables, file_name])
+			push_warning("Media count mismatch in section \"%s\", figures: %d, imgs: %d, tables: %d, file: %s" % [section["title"], section.figures, section.imgs, section.tables, file_name])
 			continue
 
 		text_edit_commentaries.text += "%s: %d\n" % [section.title, diff]
@@ -720,3 +705,101 @@ func get_file_type() -> String:
 
 func _on_button_open_in_browser_pressed() -> void:
 	OS.shell_open(preview_file_path)
+
+
+func export_fixed_docx(export_dir: String = "") -> void:
+	# Extract file
+	var exec = "powershell.exe"
+
+	if ICMain.simulate_windows_on_linux:
+		exec = "pwsh" # powershell for linux
+
+	var out_dir = "%s/%s" % [main.temp_dir_path, docx_file_path.get_file().replace(".docx", "")]
+
+	var output = []
+	var command = "Expand-Archive -LiteralPath '%s' -DestinationPath '%s' -Force" % [docx_file_path, out_dir]
+	var args = [
+		"-Command",
+		command
+	]
+
+	var err = OS.execute(exec, args, output, true)
+
+	if err != OK:
+		push_error("error extracting file: %d, details: %s" % [err, "".join(output)])
+		return
+
+	# Fix file
+	var document_xml_path = "%s/word/document.xml" % out_dir
+	var parser : XMLDocument = XML.parse_file(document_xml_path)
+	var document: XMLNode = parser.root.children[0]
+
+	# Add header stuff
+	var contract_number_node = XML.parse_str(ICFormats.header_title % "[CONTRACT NUMBER]").root
+	var contract_id_node = XML.parse_str(ICFormats.header_title % "[0001702410300A]").root
+	var site_id_node = XML.parse_str(ICFormats.header_title % ["[%s %s]" % [site_code, operator_code]]).root
+
+	document.children.insert(5, contract_number_node)
+	document.children.insert(6, contract_id_node)
+
+	if get_file_type() == "LTE":
+		document.children.insert(7, site_id_node)
+
+	# Add footer table
+	var table_title = XML.parse_str(ICFormats.bold_text_format % "Site List:").root
+	var table_node = XML.parse_str(ICFormats.table_site_list_format % site_code).root
+	document.children.append(table_title)
+	document.children.append(table_node)
+
+	var jump_line = XML.parse_str(ICFormats.line_entry % " ").root
+	document.children.append(jump_line)
+
+	# Add commentaries
+	var commentaries_title = XML.parse_str(ICFormats.bold_text_format % "RF conditions analysis, suggestions and comments:").root
+	document.children.append(commentaries_title)
+
+	for c in commentaries:
+		if c.contains("No information was made or found"):
+			continue
+
+		var commentary_node = XML.parse_str(ICFormats.line_entry % ["- %s" % c]).root
+		document.children.append(commentary_node)
+
+	# fix empty data
+	var data = parser.root.dump_str(true, 0, 0).replace("[ ]", "")
+
+	# Save file
+	var file = FileAccess.open(document_xml_path, FileAccess.WRITE)
+	file.store_string(data)
+	file.close()
+
+	# Repack docx
+	var out_fixed_dir = main.temp_dir_path
+	var out_fixed_file_name = docx_file_path.replace(".docx", "_fixed.docx")
+
+	if len(export_dir) > 0:
+		out_fixed_dir = export_dir
+		out_fixed_file_name = docx_file_path.get_file()
+
+	var out_fixed_path = "%s/%s" % [out_fixed_dir, out_fixed_file_name]
+
+	output = []
+	command = "Remove-Item '%s' -ErrorAction Ignore;" % out_fixed_path \
+		+ "[System.IO.Compression.ZipFile]::CreateFromDirectory('%s', '%s')" % [out_dir, out_fixed_path]
+	args = [
+		"-Command",
+		command
+	]
+
+	err = OS.execute(exec, args, output, true)
+
+	if err != OK:
+		push_error("error extracting file: %d, details: %s" % [err, "".join(output)])
+		return
+
+	print("✅ %s fixed" % docx_file_path.get_file())
+	call_deferred("finished_export_file")
+
+
+func finished_export_file():
+	on_finish_export.emit()

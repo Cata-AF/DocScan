@@ -1,0 +1,7 @@
+build
+dist
+out
+.venv
+*.spec
+*.html
+*.docx

@@ -1,18 +1,22 @@
 extends Node
+class_name ICMain
 
 @export var download_requements_panel : Panel
 @export var btn_download_requirements : Button
 @export var img_loading : TextureRect
 @export var scene_processed_file : PackedScene
+@export var scene_site_container : PackedScene
 @export var processed_files_container : VBoxContainer
 @export var files_dropped_list : ItemList
 @export var label_download_progress : Label
-@export var label_7zip : Label
+@export var label_docx_converter : Label
+@export var file_dialog : FileDialog
 
 @export var panel_processed_files : Panel
 @export var label_files_processed : Label
 @export var progress_bar_processed_files : ProgressBar
 @export var use_threads : CheckButton
+@export var btn_export_all_sites : Button
 
 var bin_path_format = "%s/bin"
 var temp_dir_path_format = "%s/temp"
@@ -21,22 +25,24 @@ var bin_path = ""
 var temp_dir_path = ""
 
 var pandoc_version = "3.8.2"
-var libreoffice_windows_version = "25.2.3"
 
 var docx_files: PackedStringArray = []
 var processed_files: Array[ICProcessedFile] = []
+var files_to_export: Array[ICProcessedFile] = []
+var sites_containers : Array[ICSiteContainer] = []
 
 var active_threads : Array[Thread] = []
 
 var files_processed: int = 0
+var files_exported: int = 0
 
 var download_running : bool = false
 var last_download_result
 
-var seven_zip_windows_path = "C:/Program Files/7-Zip/7z.exe"
+var sites_to_export : Array[String] = []
 
 ######## DEBUG ########
-var simulate_windows_on_linux: bool = false
+const simulate_windows_on_linux: bool = true
 #######################
 
 func _ready() -> void:
@@ -50,6 +56,7 @@ func _ready() -> void:
 	print("bin_path -> %s" % bin_path)
 	print("temp_dir_path -> %s" % temp_dir_path)
 
+	btn_export_all_sites.visible = false
 	get_window().files_dropped.connect(_on_window_files_dropped)
 	_validate_requirements()
 
@@ -58,10 +65,9 @@ func _validate_requirements():
 	img_loading.visible = false
 	label_download_progress.visible = false
 	var has_pandoc = FileAccess.file_exists(get_pandoc_path())
-	var has_libreoffice = FileAccess.file_exists(get_libreoffice_path())
-	download_requements_panel.visible = not (has_pandoc and has_libreoffice)
-	label_7zip.visible = not FileAccess.file_exists(seven_zip_windows_path)
-
+	var has_converter = FileAccess.file_exists(get_docx_to_html_converter_path())
+	label_docx_converter.visible = not has_converter
+	download_requements_panel.visible = not has_pandoc or not has_converter
 
 
 func _on_window_files_dropped(files: PackedStringArray) -> void:
@@ -90,9 +96,7 @@ func _on_button_download_pressed() -> void:
 
 
 func _prepare_requirements():
-
 	var zip_path = get_pandoc_compressed_file_path();
-	var libreoffice_path = get_libreoffice_path()
 
 	if not DirAccess.dir_exists_absolute(bin_path):
 		DirAccess.make_dir_absolute(bin_path)
@@ -134,7 +138,6 @@ func _prepare_requirements():
 
 	# Extract pandoc
 	if not FileAccess.file_exists(get_pandoc_path()):
-
 		var exit_code
 		var output = []
 
@@ -156,109 +159,6 @@ func _prepare_requirements():
 			return
 
 		print("✅ Successfully extracted pandoc")
-
-	# Download libreoffice
-	if not FileAccess.file_exists(libreoffice_path):
-		var libreoffice_download_url = get_libreoffice_download_url()
-
-		if OS.get_name() == "Linux" and not simulate_windows_on_linux:
-			var libreoffice_request = HTTPRequest.new()
-
-			print("⚙️ Downloading LibreOffice from url: %s" % libreoffice_download_url)
-
-			libreoffice_request.download_file = libreoffice_path
-			add_child(libreoffice_request)
-
-			download_running = true
-			label_download_progress.visible = true
-			libreoffice_request.request(libreoffice_download_url)
-			libreoffice_request.request_completed.connect(_on_download_finish)
-
-			while download_running:
-				await get_tree().process_frame
-				var progress : float = float(libreoffice_request.get_downloaded_bytes()) / float(libreoffice_request.get_body_size())
-				label_download_progress.text = "%f %%" % (progress * 100)
-
-			label_download_progress.visible = false
-
-			if last_download_result[0] != OK:
-				push_error("❌ Error trying to download LibreOffice, err %d" % last_download_result[0])
-				return
-
-			if last_download_result[1] != HTTPClient.RESPONSE_OK:
-				push_error("❌ Error response %d when downloading LibreOffice" % last_download_result[1])
-				return
-
-			var chmod_output = []
-			var chmod_exit = OS.execute("chmod", [
-				"+x",
-				ProjectSettings.globalize_path(libreoffice_path)
-			], chmod_output, true)
-
-			if chmod_exit != OK:
-				push_error("⚠️ Failed to set execute permissions on LibreOffice AppImage (exit code: %d) %s" % [chmod_exit, "".join(chmod_output)])
-				return
-
-			print("✅ LibreOffice has been successfully downloaded at: ", ProjectSettings.globalize_path(libreoffice_path))
-
-		elif OS.get_name() == "Windows" or simulate_windows_on_linux:
-			# Download windows portable
-			var portable_path = get_libreoffice_windows_portable_path()
-			if not FileAccess.file_exists(portable_path):
-				var libreoffice_request = HTTPRequest.new()
-
-				print("⚙️ Downloading LibreOffice from url: %s" % libreoffice_download_url)
-
-				libreoffice_request.download_file = portable_path
-				add_child(libreoffice_request)
-
-				download_running = true
-				label_download_progress.visible = true
-				libreoffice_request.request(libreoffice_download_url)
-				libreoffice_request.request_completed.connect(_on_download_finish)
-
-				while download_running:
-					await get_tree().process_frame
-					var progress : float = float(libreoffice_request.get_downloaded_bytes()) / float(libreoffice_request.get_body_size())
-					label_download_progress.text = "%f %%" % (progress * 100)
-
-				label_download_progress.visible = false
-
-				if last_download_result[0] != OK:
-					push_error("❌ Error trying to download LibreOffice, err %d" % last_download_result[0])
-					return
-
-				if last_download_result[1] != HTTPClient.RESPONSE_OK:
-					push_error("❌ Error response %d when downloading LibreOffice" % last_download_result[1])
-					return
-
-				print("✅ LibreOffice has been successfully downloaded at: ", portable_path)
-
-			# unzip file
-			if not FileAccess.file_exists(libreoffice_path):
-				var office_out_dir = "%s/office" % bin_path
-				var output = []
-				print("⚙️ extracting %s" % portable_path)
-				await get_tree().create_timer(.1).timeout
-
-				var test_7z = OS.execute(seven_zip_windows_path, ["--help"], output, true)
-				if test_7z != 0:
-					push_error("7z is not installed on this system.")
-					return false
-
-				var args = [
-					"x", portable_path,
-					"-o" + office_out_dir,
-					"-y"
-				]
-
-				var exit_code = OS.execute(seven_zip_windows_path, args, output, true)
-
-				if exit_code != 0:
-					print("".join(output))
-					push_error("Failed to extract using 7zip.")
-
-				print("✅ %s extracted" % portable_path)
 
 	_validate_requirements()
 
@@ -285,22 +185,13 @@ func get_pandoc_path():
 	return "%s/pandoc-%s/pandoc.exe" % [bin_path, pandoc_version]
 
 
-func get_libreoffice_download_url():
-	if OS.get_name() == "Windows" or simulate_windows_on_linux:
-		return "https://download.documentfoundation.org/libreoffice/portable/%s/LibreOfficePortable_%s_MultilingualStandard.paf.exe" % [libreoffice_windows_version, libreoffice_windows_version]
+func get_docx_to_html_converter_path():
+	if OS.get_name() == "Linux":
+		return "%s/docx_to_html" % bin_path
 
-	return "https://appimages.libreitalia.org/LibreOffice-fresh.basic-x86_64.AppImage"
+	# Windows
+	return "%s/docx_to_html.exe" % bin_path
 
-
-func get_libreoffice_windows_portable_path():
-	return "%s/LibreOfficePortable_%s_MultilingualStandard.paf.exe" % [bin_path, libreoffice_windows_version]
-
-
-func get_libreoffice_path():
-	if OS.get_name() == "Windows" or simulate_windows_on_linux:
-		return "%s/office/App/libreoffice/program/soffice.com" % bin_path
-
-	return "%s/LibreOffice-fresh.basic-x86_64.AppImage" % bin_path
 
 
 func _on_button_process_pressed() -> void:
@@ -308,6 +199,8 @@ func _on_button_process_pressed() -> void:
 
 	if not FileAccess.file_exists(get_pandoc_path()) or total_files == 0:
 		return
+
+	btn_export_all_sites.visible = false
 
 	panel_processed_files.visible = true
 	label_files_processed.text = "0/%d" % total_files
@@ -352,13 +245,15 @@ func _on_button_process_pressed() -> void:
 	await get_tree().create_timer(.5).timeout
 	panel_processed_files.visible = false
 
+	_on_finish_process_all_files()
+
 
 func process_file(docx_file_path: String, is_using_threads: bool):
 	var file_name = docx_file_path.get_file()
 
 	var file_path = docx_file_path
 	var source_docx_global_path = ProjectSettings.globalize_path("%s/%s" % [temp_dir_path, file_name.replace(" ", "_")])
-	var out_xhtml_path = source_docx_global_path.replace(".docx", ".xhtml")
+	var out_html_path = source_docx_global_path.replace(".docx", ".html")
 	var out_xml_path = source_docx_global_path.replace(".docx", ".xml")
 
 	var processed_file : ICProcessedFile
@@ -379,16 +274,11 @@ func process_file(docx_file_path: String, is_using_threads: bool):
 
 		# conver docx to html & xml
 		print("⚙️ converting %s to html" % file_name)
-		var exec = "wine" if simulate_windows_on_linux else ProjectSettings.globalize_path(get_libreoffice_path())
+		var exec = get_docx_to_html_converter_path()
 		var args : Array[String] = [
-			"--headless",
-			"--convert-to", "xhtml:XHTML Writer File",
-			"--outdir", temp_dir_path,
-			docx_source_path
+			docx_file_global_path,
+			out_html_path
 		]
-
-		if simulate_windows_on_linux:
-			args.push_front(ProjectSettings.globalize_path(get_libreoffice_path()))
 
 		var err = OS.execute(exec, args, output, true)
 
@@ -409,17 +299,8 @@ func process_file(docx_file_path: String, is_using_threads: bool):
 			push_error("error converting file to xml %s -> %s" % [file_name, "".join(output)])
 			break
 
-		if file_name.contains(" "):
-			var dir = DirAccess.open(temp_dir_path)
-			var out_file_name = file_name.replace(".docx", ".xhtml")
-
-			err = dir.rename(out_file_name, out_file_name.replace(" ", "_"))
-
-			if err != OK:
-				push_error("err moving file: ", err)
-
 		processed_file = scene_processed_file.instantiate() as ICProcessedFile
-		processed_file.setup(out_xhtml_path, out_xml_path)
+		processed_file.setup(out_html_path, out_xml_path, docx_file_global_path, self)
 		processed_file.validate_integrity()
 
 		# ⚠️⚠️⚠️ prevent infinite loop ⚠️⚠️⚠️
@@ -430,7 +311,7 @@ func process_file(docx_file_path: String, is_using_threads: bool):
 	else:
 		on_finish_process_file(processed_file)
 
-	print("💫 %s converted to html & xml" % file_name)
+	print("💫 [%s] %s converted to html & xml" % [processed_file.site_code, file_name])
 
 
 func on_finish_process_file(processed_file: ICProcessedFile):
@@ -442,9 +323,115 @@ func on_finish_process_file(processed_file: ICProcessedFile):
 	processed_files.append(processed_file)
 
 
+func _on_finish_process_all_files():
+	var sites_id = []
+
+	for site in sites_containers:
+		site.queue_free()
+
+	sites_containers = []
+
+	# Generate sites containers
+	for file in processed_files:
+		if not sites_id.has(file.site_code):
+			sites_id.append(file.site_code)
+
+	for site_id in sites_id:
+		var container = scene_site_container.instantiate() as ICSiteContainer
+		container.title = site_id
+		container.on_press_export_all.connect(_on_press_export_all)
+		sites_containers.append(container)
+		processed_files_container.add_child(container)
+
+	# Order sites
+	for file in processed_files:
+		var container_idx = 0
+
+		for i in len(sites_containers):
+			if sites_containers[i].title == file.site_code:
+				container_idx = i
+				break
+
+		file.reparent(sites_containers[container_idx].container)
+
+	btn_export_all_sites.text = "Export all (%d) sites..." % len(sites_containers)
+	btn_export_all_sites.visible = true
+
+
 func _on_button_analize_files_pressed() -> void:
 	for file in processed_files:
 		file.validate_integrity()
+
+
+func _on_button_export_all_sites_pressed() -> void:
+	sites_to_export = []
+
+	for site in sites_containers:
+		sites_to_export.append(site.title)
+
+	file_dialog.popup_centered()
+
+
+func _on_press_export_all(container: ICSiteContainer):
+	sites_to_export = [container.title]
+	file_dialog.popup_centered()
+
+
+func _export_file_sites_to_dir(dir: String):
+	files_to_export = []
+
+	for site in sites_to_export:
+		for f in processed_files:
+			if f.site_code == site:
+				files_to_export.append(f)
+
+	if len(sites_to_export)	> 1:
+		for site in sites_containers:
+			var out_dir = "%s/%s" % [dir, site.title]
+
+			if not DirAccess.dir_exists_absolute(out_dir):
+				DirAccess.make_dir_absolute(out_dir)
+
+	files_exported = 0
+	panel_processed_files.visible = true
+	label_files_processed.text = "0/%d" % len(files_to_export)
+	progress_bar_processed_files.value = 0
+
+	# Convert files
+	for f in files_to_export:
+
+		var out_dir = dir
+
+		if len(sites_to_export) > 1:
+			out_dir = "%s/%s" % [out_dir, f.site_code]
+
+		if not use_threads.button_pressed:
+			f.export_fixed_docx(out_dir)
+			await get_tree().process_frame
+			continue
+
+		var th = Thread.new()
+		active_threads.append(th)
+		th.start(f.export_fixed_docx.bind(out_dir))
+
+	# wait for active tasks if active
+	if use_threads.button_pressed:
+		while files_processed < len(files_to_export):
+			await get_tree().process_frame
+
+	label_files_processed.text = "%d/%d" % [len(files_to_export), len(files_to_export)]
+	progress_bar_processed_files.value = 100
+	await get_tree().create_timer(.5).timeout
+	panel_processed_files.visible = false
+
+	# Open dir
+	OS.shell_open(dir)
+
+
+func _on_finish_export_file():
+	files_exported += 1
+	label_files_processed.text = "%d/%d" % [files_exported, len(files_to_export)]
+	progress_bar_processed_files.value = (float(files_exported) / len(files_to_export)) * 100
 
 
 func _on_close_requested() -> void:
