@@ -22,5 +22,6 @@ if __name__ == "__main__":
 
     print("finished html prettifying")
 
-    with open(args.destination, "w") as html_file:
+    # Write with UTF-8 encoding to support non-ASCII characters in the converted HTML.
+    with open(args.destination, "w", encoding="utf-8") as html_file:
         html_file.write(html)
