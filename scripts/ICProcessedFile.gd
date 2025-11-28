@@ -774,8 +774,8 @@ func export_fixed_docx(export_dir: String = "") -> void:
 	file.close()
 
 	# Repack docx
-	var out_fixed_dir = main.temp_dir_path
-	var out_fixed_file_name = docx_file_path.replace(".docx", "_fixed.docx")
+	var out_fixed_dir = docx_file_path.replace(docx_file_path.get_file(), "")
+	var out_fixed_file_name = docx_file_path.get_file().replace(".docx", "_fixed.docx")
 
 	if len(export_dir) > 0:
 		out_fixed_dir = export_dir
@@ -794,7 +794,7 @@ func export_fixed_docx(export_dir: String = "") -> void:
 	err = OS.execute(exec, args, output, true)
 
 	if err != OK:
-		push_error("error extracting file: %d, details: %s" % [err, "".join(output)])
+		push_error("error packing file: %d, details: %s" % [err, "".join(output)])
 		return
 
 	print("✅ %s fixed" % docx_file_path.get_file())
