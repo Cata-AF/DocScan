@@ -8,7 +8,9 @@
 
     - On Windows:
 
-            .venv\Scripts\activate
+            Set-ExecutionPolicy Bypass
+
+            ./.venv/Scripts/Activate.ps1
             
     - On Unix or MacOS:
 

@@ -42,7 +42,7 @@ var last_download_result
 var sites_to_export : Array[String] = []
 
 ######## DEBUG ########
-const simulate_windows_on_linux: bool = true
+const simulate_windows_on_linux: bool = false
 #######################
 
 func _ready() -> void:

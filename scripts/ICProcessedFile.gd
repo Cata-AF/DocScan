@@ -717,7 +717,11 @@ func export_fixed_docx(export_dir: String = "") -> void:
 	var out_dir = "%s/%s" % [main.temp_dir_path, docx_file_path.get_file().replace(".docx", "")]
 
 	var output = []
-	var command = "Expand-Archive -LiteralPath '%s' -DestinationPath '%s' -Force" % [docx_file_path, out_dir]
+	var command = (
+		"Remove-Item -Path '%s' -Recurse -Force -ErrorAction Ignore;" % out_dir
+		+ "Add-Type -AssemblyName System.IO.Compression.FileSystem;"
+		+ "[System.IO.Compression.ZipFile]::ExtractToDirectory('%s', '%s')" % [docx_file_path, out_dir]
+	)
 	var args = [
 		"-Command",
 		command
@@ -785,6 +789,7 @@ func export_fixed_docx(export_dir: String = "") -> void:
 
 	output = []
 	command = "Remove-Item '%s' -ErrorAction Ignore;" % out_fixed_path \
+		+ "Add-Type -AssemblyName System.IO.Compression.FileSystem;"  \
 		+ "[System.IO.Compression.ZipFile]::CreateFromDirectory('%s', '%s')" % [out_dir, out_fixed_path]
 	args = [
 		"-Command",
