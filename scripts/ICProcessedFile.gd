@@ -10,6 +10,9 @@ var file_name : String = ""
 var docx_file_path: String = ""
 var site_code: String = ""
 var operator_code: String = ""
+var has_image_issues: bool = false
+var broken_images_count: int = 0
+var missing_images_count: int = 0
 
 const TOTAL_NBR_OF_APP = "Total Nbr. of Application (FTP UL) Success"
 const SITE_CODE_PATTERN = "[A-Z]{1,5}\\d{3,5}"
@@ -62,8 +65,10 @@ func validate_integrity():
 		commentaries = validate_integrity_umts()
 
 	set_commentaries(commentaries)
-	verify_broken_images()
-	summarize_media_counts_by_category()
+	broken_images_count = verify_broken_images()
+	missing_images_count = summarize_media_counts_by_category()
+	has_image_issues = broken_images_count > 0 or missing_images_count > 0
+	_update_issue_visuals()
 
 func get_node_deepest_content(xml_node: XMLNode) -> String:
 	if len(xml_node.children) > 0:
@@ -514,7 +519,11 @@ func build_title_text() -> String:
 	return " ".join(parts)
 
 
-func verify_broken_images():
+func _update_issue_visuals():
+	self_modulate = Color(1, 0.6, 0.6) if has_image_issues else Color(1, 1, 1)
+
+
+func verify_broken_images() -> int:
 	var url_broken_img = "https://placehold.co/472x302/red/white"
 	var rx_imgs = RegEx.create_from_string("<img\\b[^>]*?src=[\"']([^\"']+)[\"'][^>]*?>")
 	var rx_imgs_broken_fallback = RegEx.create_from_string(url_broken_img)
@@ -546,11 +555,13 @@ func verify_broken_images():
 		file.store_string(file_data)
 		file.close()
 
+	return broken_images
 
-func summarize_media_counts_by_category():
+
+func summarize_media_counts_by_category() -> int:
 	var file = FileAccess.open(preview_file_path, FileAccess.READ)
 	if file == null:
-		return
+		return 0
 
 	var sections: Array[Dictionary] = []
 	var valid_main_categories = [
@@ -571,6 +582,7 @@ func summarize_media_counts_by_category():
 
 	var building_h1 : bool = false
 	var building_h2 : bool = false
+	var missing_count: int = 0
 
 	while !file.eof_reached():
 		var line = file.get_line()
@@ -661,7 +673,7 @@ func summarize_media_counts_by_category():
 	file.close()
 
 	if sections.size() == 0:
-		return
+		return 0
 
 	# Set results
 	var last_category: String = ""
@@ -679,6 +691,7 @@ func summarize_media_counts_by_category():
 			abnormal_missing = expected_imgs - section.imgs
 			if abnormal_missing > 0:
 				text_edit_commentaries.text += "%s: %d\n" % [section.title, abnormal_missing,]
+				missing_count += abnormal_missing
 
 		var diff = section.figures - (section.imgs + section.tables)
 
@@ -691,6 +704,9 @@ func summarize_media_counts_by_category():
 			continue
 
 		text_edit_commentaries.text += "%s: %d\n" % [section.title, diff]
+		missing_count += diff
+
+	return missing_count
 
 
 func get_file_type() -> String:

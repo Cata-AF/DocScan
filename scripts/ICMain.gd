@@ -17,6 +17,8 @@ class_name ICMain
 @export var progress_bar_processed_files : ProgressBar
 @export var use_threads : CheckButton
 @export var btn_export_all_sites : Button
+@export var label_issue_count : Label
+@export var label_processed_title : Label
 
 var bin_path_format = "%s/bin"
 var temp_dir_path_format = "%s/temp"
@@ -59,6 +61,7 @@ func _ready() -> void:
 	btn_export_all_sites.visible = false
 	get_window().files_dropped.connect(_on_window_files_dropped)
 	_validate_requirements()
+	_update_issue_overview()
 
 
 func _validate_requirements():
@@ -356,11 +359,14 @@ func _on_finish_process_all_files():
 
 	btn_export_all_sites.text = "Export all (%d) sites..." % len(sites_containers)
 	btn_export_all_sites.visible = true
+	_update_issue_overview()
+	_update_processed_title(processed_files.size())
 
 
 func _on_button_analize_files_pressed() -> void:
 	for file in processed_files:
 		file.validate_integrity()
+	_update_issue_overview()
 
 
 func _on_button_export_all_sites_pressed() -> void:
@@ -449,3 +455,39 @@ func get_working_dir_path():
 func _on_download_finish(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray):
 	download_running = false
 	last_download_result = [result, response_code, headers, body]
+
+
+func _update_issue_overview():
+	var doc_with_issues := 0
+	var site_issue_map := {}
+
+	for file in processed_files:
+		if file == null:
+			continue
+
+		if file.has_image_issues:
+			doc_with_issues += 1
+			site_issue_map[file.site_code] = true
+		else:
+			site_issue_map[file.site_code] = site_issue_map.get(file.site_code, false)
+
+	var sites_with_issues := 0
+
+	for site in sites_containers:
+		var active = site_issue_map.has(site.title) and site_issue_map[site.title]
+		site.set_issue_state(active)
+		if active:
+			sites_with_issues += 1
+
+	if label_issue_count != null:
+		label_issue_count.text = "Issues highlighted: %d docs / %d sites" % [doc_with_issues, sites_with_issues]
+
+
+func _update_processed_title(total: int = -1):
+	if label_processed_title == null:
+		return
+
+	if total >= 0:
+		label_processed_title.text = "Files processed (%d)" % total
+	else:
+		label_processed_title.text = "Files processed"
