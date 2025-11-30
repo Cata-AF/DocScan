@@ -52,9 +52,9 @@ func setup(preview_html_path: String, doc_xml_path: String, word_file_path: Stri
 func validate_integrity():
 	# Extract site code if not already set
 	if site_code.is_empty():
-		site_code = get_site_code_from_filename(file_name)
+		site_code = get_site_code_from_filename(docx_file_path.get_file())
 	if operator_code.is_empty():
-		operator_code = get_operator_from_filename(file_name)
+		operator_code = get_operator_from_filename(docx_file_path.get_file())
 
 	if get_file_type() == "LTE":
 		commentaries = validate_integrity_lte()
@@ -74,10 +74,10 @@ func get_node_deepest_content(xml_node: XMLNode) -> String:
 
 func get_site_code_from_filename(n: String) -> String:
 	if get_file_type() == "LTE":
-		return n.split("LTE")[1].split(" ")[0].trim_prefix(" ").trim_suffix(" ")
+		return n.split("LTE")[1].strip_edges().split(" ")[0]
 
 	# UMTS
-	return n.split("UMTS")[1].trim_prefix(" ").split(" ")[0]
+	return n.split("UMTS")[1].strip_edges().split(" ")[0]
 
 
 func get_operator_from_filename(n: String) -> String:
