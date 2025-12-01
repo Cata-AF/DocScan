@@ -196,7 +196,7 @@ const table_site_list_format = """
                         <w:rPr>
                             <w:lang w:eastAsia="en-US" />
                         </w:rPr>
-                        <w:t></w:t>
+                        <w:t>%s</w:t>
                     </w:r>
                 </w:p>
             </w:tc>

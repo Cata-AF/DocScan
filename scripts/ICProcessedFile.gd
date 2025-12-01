@@ -10,9 +10,14 @@ var file_name : String = ""
 var docx_file_path: String = ""
 var site_code: String = ""
 var operator_code: String = ""
+var duid: String = ""
 var has_image_issues: bool = false
 var broken_images_count: int = 0
 var missing_images_count: int = 0
+
+const SITES_DUID_CSV_PATH := "res://build/SITES_DUID.csv"
+static var _site_duid_map: Dictionary = {}
+static var _site_duid_map_loaded: bool = false
 
 const TOTAL_NBR_OF_APP = "Total Nbr. of Application (FTP UL) Success"
 const SITE_CODE_PATTERN = "[A-Z]{1,5}\\d{3,5}"
@@ -50,6 +55,7 @@ func setup(preview_html_path: String, doc_xml_path: String, word_file_path: Stri
 	title = file_name
 	site_code = get_site_code_from_filename(word_file_path.get_file())
 	operator_code = get_operator_from_filename(file_name)
+	duid = get_duid_for_site(site_code)
 
 
 func validate_integrity():
@@ -58,6 +64,8 @@ func validate_integrity():
 		site_code = get_site_code_from_filename(docx_file_path.get_file())
 	if operator_code.is_empty():
 		operator_code = get_operator_from_filename(docx_file_path.get_file())
+	if duid.is_empty():
+		duid = get_duid_for_site(site_code)
 
 	if get_file_type() == "LTE":
 		commentaries = validate_integrity_lte()
@@ -92,6 +100,52 @@ func get_operator_from_filename(n: String) -> String:
 		return "TIGO"
 	else:
 		return "UNKNOWN"
+
+
+func get_duid_for_site(site: String) -> String:
+	if site.is_empty():
+		return ""
+
+	if not _site_duid_map_loaded:
+		_load_site_duid_map()
+
+	var key = site.strip_edges().to_upper()
+	if _site_duid_map.has(key):
+		return str(_site_duid_map[key])
+	return ""
+
+
+func _load_site_duid_map():
+	_site_duid_map_loaded = true
+
+	var file = FileAccess.open(SITES_DUID_CSV_PATH, FileAccess.READ)
+	if file == null:
+		push_warning("SITES_DUID.csv not found; DUIDs will be empty")
+		return
+
+	while not file.eof_reached():
+		var line = file.get_line()
+		if line.is_empty():
+			continue
+
+		var cols = line.split(";")
+		if cols.size() < 2:
+			cols = line.split(",")
+			if cols.size() < 2:
+				continue
+
+		var site = cols[0].replace("\"", "").strip_edges().to_upper()
+		var duid_value = cols[1].replace("\"", "").strip_edges()
+
+		if site.is_empty() or duid_value.is_empty():
+			continue
+		# saltar encabezado
+		if site.to_lower().contains("codigo") and duid_value.to_lower().contains("duid"):
+			continue
+
+		_site_duid_map[site] = duid_value
+
+	file.close()
 
 
 func validate_integrity_lte() -> Array[String]:
@@ -376,6 +430,7 @@ func set_commentaries(comments: Array[String]):
 	file_data = apply_title_override(file_data)
 
 	if rx_added_comments.search(file_data) != null:
+		file_data = _update_duid_in_existing_comments(file_data)
 		var file_existing = FileAccess.open(preview_file_path, FileAccess.WRITE)
 		file_existing.store_string(file_data)
 		file_existing.close()
@@ -390,7 +445,7 @@ func set_commentaries(comments: Array[String]):
 
 	table_html += "<tr>\n"
 	table_html += "	<td style=\"border:1px solid black; font-size: 10.5pt; text-align: left;\">&nbsp;&nbsp;%s</td>\n" % site_code
-	table_html += "	<td style=\"border:1px solid black; font-size: 10.5pt; text-align: left;\"></td>\n"
+	table_html += "	<td style=\"border:1px solid black; font-size: 10.5pt; text-align: left;\">%s</td>\n" % duid
 	table_html += "</tr>\n"
 	table_html += "</table>\n"
 
@@ -517,6 +572,24 @@ func build_title_text() -> String:
 		parts.append(operator_code)
 
 	return " ".join(parts)
+
+
+func _update_duid_in_existing_comments(file_data: String) -> String:
+	if duid.is_empty():
+		return file_data
+
+	var rx_duid_cell = RegEx.create_from_string("(<th[^>]*>DUID</th>\\s*</tr>\\s*<tr>\\s*<td[^>]*>[^<]*</td>\\s*<td[^>]*>)([^<]*)(</td>)")
+	var match = rx_duid_cell.search(file_data)
+
+	if match == null:
+		return file_data
+
+	var rebuilt = file_data.substr(0, match.get_start())
+	rebuilt += match.get_string(1)
+	rebuilt += duid
+	rebuilt += match.get_string(3)
+	rebuilt += file_data.substr(match.get_end())
+	return rebuilt
 
 
 func _update_issue_visuals():
@@ -767,7 +840,7 @@ func export_fixed_docx(export_dir: String = "") -> void:
 
 	# Add footer table
 	var table_title = XML.parse_str(ICFormats.bold_text_format % "Site List:").root
-	var table_node = XML.parse_str(ICFormats.table_site_list_format % site_code).root
+	var table_node = XML.parse_str(ICFormats.table_site_list_format % [site_code, duid]).root
 	document.children.append(table_title)
 	document.children.append(table_node)
 
