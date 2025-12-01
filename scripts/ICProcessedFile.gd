@@ -15,7 +15,7 @@ var has_image_issues: bool = false
 var broken_images_count: int = 0
 var missing_images_count: int = 0
 
-const SITES_DUID_CSV_PATH := "res://build/SITES_DUID.csv"
+const SITES_DUID_CSV_PATH := "res://bin/SITES_DUID.csv"
 static var _site_duid_map: Dictionary = {}
 static var _site_duid_map_loaded: bool = false
 
