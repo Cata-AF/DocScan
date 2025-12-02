@@ -303,6 +303,7 @@ func process_file(docx_file_path: String, is_using_threads: bool):
 			break
 
 		processed_file = scene_processed_file.instantiate() as ICProcessedFile
+		processed_file.on_finish_export.connect(_on_finish_export_file)
 		processed_file.setup(out_html_path, out_xml_path, docx_file_global_path, self)
 		processed_file.validate_integrity()
 
@@ -422,7 +423,7 @@ func _export_file_sites_to_dir(dir: String):
 
 	# wait for active tasks if active
 	if use_threads.button_pressed:
-		while files_processed < len(files_to_export):
+		while files_exported < len(files_to_export):
 			await get_tree().process_frame
 
 	label_files_processed.text = "%d/%d" % [len(files_to_export), len(files_to_export)]
